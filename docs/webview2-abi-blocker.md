@@ -1,4 +1,6 @@
-# foo_ui_webview2 external API: Phase 2 ABI audit
+> **Historical note (2026-11-25):** This audit explains why the original PluginRegistry-based integration was rejected. The project direction has since changed to a loopback-only HTTP service. PluginRegistry is no longer the planned primary transport. See [local HTTP service architecture](local-http-service-architecture.md) and [WebView2 bootstrap contract](webview2-bootstrap-contract.md).
+
+# Historical audit: foo_ui_webview2 external API ABI
 
 ## Audit result
 
