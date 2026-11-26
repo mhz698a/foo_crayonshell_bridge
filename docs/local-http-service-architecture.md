@@ -4,7 +4,7 @@
 
 The component exposes a narrow, versioned JSON API through an HTTP/1.1 service bound exclusively to IPv4 loopback. It does not use `foo_ui_webview2::PluginRegistry` as its primary transport.
 
-The service remains inside the foobar2000 process. Listener, parsing, authentication, request validation and Windows file metadata access run outside the foobar2000 UI thread. Only SDK calls that require the main thread are marshalled through the SDK callback queue.
+The service remains inside the foobar2000 process. The `initquit::on_init()` callback creates the controller and schedules `HttpServer::start()` on a dedicated startup thread; Winsock startup, socket binding, token generation, and worker/listener thread creation do not run inside foobar2000's UI-thread initialization callback. Shutdown first prevents new API work, joins any in-progress startup operation, then stops the server and joins its owned threads. Listener, parsing, authentication, request validation and Windows file metadata access run outside the foobar2000 UI thread. Only SDK calls that require the main thread are marshalled through the SDK callback queue.
 
 No arbitrary filesystem paths are accepted from the frontend. Playlist coordinates are resolved by foobar2000 and the physical path is copied internally; only the copied path is used for Windows attribute access.
 
