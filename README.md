@@ -22,6 +22,7 @@ Existing implementation:
 - [Local HTTP service architecture](docs/local-http-service-architecture.md)
 - [HTTP API v1 contract](docs/http-api-v1.md)
 - [WebView2 bootstrap contract](docs/webview2-bootstrap-contract.md)
+- [Third-party dependency pins and licenses](docs/third-party-dependencies.md)
 - [Historical foo_ui_webview2 ABI audit](docs/webview2-abi-blocker.md)
 
 A key integration prerequisite remains: securely delivering the service's ephemeral port and per-instance bearer token from the trusted WebView2 host to the CrayonShell document. The production document origin is `https://foo-ui-webview2.local/`; Vite development uses `http://localhost:5173`. CORS/Private Network Access behavior must be verified in the embedded WebView2 runtime.
