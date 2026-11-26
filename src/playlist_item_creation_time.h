@@ -1,15 +1,22 @@
 #pragma once
 
-#include "file_creation_time.h"
+#include <Windows.h>
 
 #include <cstddef>
+#include <string>
 
-namespace craybridge::file_time {
+namespace craybridge::playlist {
 
-// Must be called on the foobar2000 main thread. The caller supplies playlist
-// coordinates only; no arbitrary path is accepted from the WebView frontend.
-[[nodiscard]] QueryResult
-query_playlist_item_creation_time(std::size_t playlist_index,
-                                  std::size_t item_index);
+struct ItemPathResult {
+    bool success = false;
+    std::wstring physical_path;
+    DWORD win32_error = ERROR_SUCCESS;
+};
 
-} // namespace craybridge::file_time
+// Must be called on the foobar2000 main thread. Resolves only an existing
+// playlist item; it performs no filesystem I/O and accepts no caller-supplied
+// path. The returned path can be passed to a filesystem worker.
+[[nodiscard]] ItemPathResult
+resolve_item_path(std::size_t playlist_index, std::size_t item_index);
+
+} // namespace craybridge::playlist
