@@ -27,7 +27,6 @@ Failure:
       "error": {
         "code": "INVALID_PLAYLIST_INDEX",
         "message": "The requested playlist does not exist."
-        // Filesystem failures may additionally include a numeric win32Error.
       }
     }
 
@@ -41,7 +40,7 @@ Returns protocol/component version, service uptime and implemented capability fl
       "success": true,
       "data": {
         "protocolVersion": 1,
-        "componentVersion": "0.1.0",
+        "componentVersion": "0.1.1",
         "uptimeMs": 12000,
         "capabilities": {
           "readFileSize": true,
