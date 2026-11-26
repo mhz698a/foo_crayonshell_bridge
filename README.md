@@ -15,6 +15,7 @@ Existing implementation:
 - A playlist-index lookup that retrieves the foobar2000 `metadb_handle` and resolves its physical path on the SDK-required thread.
 - Windows unit tests for timestamp conversions, file timestamp reads/writes, unsupported ChangeTime writes, missing files, empty paths, and directories.
 - A strict, bounded HTTP/1.1 request parser adapter based on llhttp, with tests for incremental input, Content-Length, chunked bodies, framing conflicts, upgrades, and request limits.
+- One combined x86/x64 test executable entry point for timestamp and HTTP parser suites.
 - GitHub Actions builds and runs tests for Win32 (x86) and x64, then packages both binaries in one `.fb2k-component`.
 
 **The HTTP service and Winsock listener are not implemented yet.** The bounded llhttp parser adapter is now integrated into the component and test project definitions. The architecture and first API contract are documented in:
@@ -50,6 +51,7 @@ It contains:
 
 - `foo_crayonshell_bridge.dll` at the archive root: legacy 32-bit x86 build.
 - `x64/foo_crayonshell_bridge.dll`: 64-bit x64 build.
+- `licenses/llhttp-MIT.txt`: MIT license notice for the embedded llhttp parser.
 
 This follows foobar2000's multi-architecture component package convention. The same file can be installed in 32-bit or 64-bit foobar2000; each host uses its matching binary.
 

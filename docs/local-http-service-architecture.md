@@ -19,7 +19,9 @@ The filesystem timestamp helper now has a first implementation independent of HT
 - Reads values back from the same file handle after a successful write and reports write success separately from readback success.
 - Converts FILETIME to Unix milliseconds and validates the reverse conversion against the signed `LARGE_INTEGER` range used by `FILE_BASIC_INFO`.
 
-The filesystem helper is not yet exposed to JavaScript or called by an HTTP route. Its Windows read/write tests have been expanded. The HTTP parser adapter and parser tests are now part of both Visual Studio projects; CI must verify the current branch head before these changes are considered build-validated.
+The filesystem helper is not yet exposed to JavaScript or called by an HTTP route. Its Windows read/write tests are included in the test executable.
+
+The HTTP parser adapter and parser tests are integrated into both Visual Studio projects. GitHub Actions run #92 (commit `96fe2558728b9d328b8f8575ae491bd4bcbcf730`) completed successfully: Win32 and x64 component builds, both test builds, both test executions, multi-architecture packaging, and artifact upload all passed.
 
 ## Constraints discovered
 

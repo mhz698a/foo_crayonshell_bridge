@@ -26,7 +26,14 @@ if (Test-Path $stage) {
 }
 
 $x64Stage = Join-Path $stage "x64"
-New-Item -ItemType Directory -Force -Path $x64Stage | Out-Null
+$licensesStage = Join-Path $stage "licenses"
+New-Item -ItemType Directory -Force -Path $x64Stage, $licensesStage | Out-Null
+
+$llhttpLicense = Join-Path $repoRoot "vendor\llhttp\LICENSE"
+if (-not (Test-Path $llhttpLicense)) {
+    throw "The pinned llhttp MIT license is missing: $llhttpLicense"
+}
+Copy-Item -LiteralPath $llhttpLicense -Destination (Join-Path $licensesStage "llhttp-MIT.txt") -Force
 
 # foobar2000's multi-architecture package convention:
 # - root DLL is the legacy x86 build
@@ -50,7 +57,8 @@ $zip = [System.IO.Compression.ZipFile]::Open(
 try {
     foreach ($entry in @(
         @{ Source = (Join-Path $stage "foo_crayonshell_bridge.dll"); Name = "foo_crayonshell_bridge.dll" },
-        @{ Source = (Join-Path $x64Stage "foo_crayonshell_bridge.dll"); Name = "x64/foo_crayonshell_bridge.dll" }
+        @{ Source = (Join-Path $x64Stage "foo_crayonshell_bridge.dll"); Name = "x64/foo_crayonshell_bridge.dll" },
+        @{ Source = (Join-Path $licensesStage "llhttp-MIT.txt"); Name = "licenses/llhttp-MIT.txt" }
     )) {
         [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
             $zip,
