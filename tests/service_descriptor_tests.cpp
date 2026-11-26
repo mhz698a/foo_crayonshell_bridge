@@ -71,7 +71,7 @@ int run_service_descriptor_tests() {
     std::filesystem::remove_all(test_root, filesystem_error);
     filesystem_error.clear();
     std::filesystem::create_directories(test_root, filesystem_error);
-    if (!require(!filesystem_error, "test LocalAppData root must be created")) return 1;
+    if (!require(!filesystem_error, "test profile root must be created")) return 1;
 
     craybridge::bootstrap::ServiceDescriptorPublisher publisher(test_root);
     unsigned long error_code = ERROR_SUCCESS;
@@ -83,6 +83,12 @@ int run_service_descriptor_tests() {
 
     const auto descriptor_path = publisher.descriptor_path();
     const auto first_instance_id = std::string(publisher.instance_id());
+    if (!require(descriptor_path.parent_path().filename() == L"foo_crayonshell_bridge",
+                 "descriptor must be published directly inside the foobar2000 profile")) {
+        publisher.remove_if_owned();
+        std::filesystem::remove_all(test_root, filesystem_error);
+        return 1;
+    }
     const auto published = read_file(descriptor_path);
     if (!require(!published.empty() &&
                  published.find("\"service\":\"crayonshell\"") != std::string::npos &&
