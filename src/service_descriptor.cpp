@@ -11,6 +11,7 @@
 #include <bcrypt.h>
 #include <sddl.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -414,11 +415,13 @@ bool ServiceDescriptorPublisher::publish(
         }
         const std::uint64_t expires_at = now + kDescriptorLifetimeMs;
 
-        unsigned long random_error = ERROR_SUCCESS;
-        if (!generate_random_id(instance_id_, random_error)) {
-            free_security_descriptor();
-            error_code = random_error;
-            return false;
+        if (instance_id_.empty()) {
+            unsigned long random_error = ERROR_SUCCESS;
+            if (!generate_random_id(instance_id_, random_error)) {
+                free_security_descriptor();
+                error_code = random_error;
+                return false;
+            }
         }
 
         std::string document;
@@ -450,6 +453,9 @@ bool ServiceDescriptorPublisher::publish(
         file_attributes.nLength = sizeof(file_attributes);
         file_attributes.lpSecurityDescriptor = security_descriptor;
         file_attributes.bInheritHandle = FALSE;
+
+        // Clean up an instance-specific temporary file left by an earlier failed publish.
+        ::DeleteFileW(temporary_path.c_str());
 
         HANDLE file = ::CreateFileW(
             temporary_path.c_str(),
@@ -501,7 +507,7 @@ void ServiceDescriptorPublisher::remove_if_owned() noexcept {
         const std::string marker =
             "\"instanceId\":\"" + instance_id_ + "\"";
         const std::string pid_marker =
-            "\"pid\":" + std::to_string(::GetCurrentProcessId());
+            "\"pid\":" + std::to_string(::GetCurrentProcessId()) + ",";
         if (content.find(marker) != std::string::npos &&
             content.find(pid_marker) != std::string::npos) {
             ::DeleteFileW(descriptor_path_.c_str());
