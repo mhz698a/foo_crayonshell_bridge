@@ -591,15 +591,30 @@ struct HttpServer::Impl {
                 continue;
             }
 
+            // accept() returns a socket with the listener's operating
+            // properties. The listener is non-blocking for select/accept;
+            // explicitly restore blocking mode for worker recv/send so the
+            // configured SO_RCVTIMEO/SO_SNDTIMEO deadlines are effective.
+            u_long blocking_mode = 0;
+            if (::ioctlsocket(accepted, FIONBIO, &blocking_mode) == SOCKET_ERROR) {
+                ::shutdown(accepted, SD_BOTH);
+                ::closesocket(accepted);
+                continue;
+            }
+
             const DWORD timeout_ms = options.socket_timeout_ms;
-            ::setsockopt(
-                accepted, SOL_SOCKET, SO_RCVTIMEO,
-                reinterpret_cast<const char*>(&timeout_ms),
-                sizeof(timeout_ms));
-            ::setsockopt(
-                accepted, SOL_SOCKET, SO_SNDTIMEO,
-                reinterpret_cast<const char*>(&timeout_ms),
-                sizeof(timeout_ms));
+            if (::setsockopt(
+                    accepted, SOL_SOCKET, SO_RCVTIMEO,
+                    reinterpret_cast<const char*>(&timeout_ms),
+                    sizeof(timeout_ms)) == SOCKET_ERROR ||
+                ::setsockopt(
+                    accepted, SOL_SOCKET, SO_SNDTIMEO,
+                    reinterpret_cast<const char*>(&timeout_ms),
+                    sizeof(timeout_ms)) == SOCKET_ERROR) {
+                ::shutdown(accepted, SD_BOTH);
+                ::closesocket(accepted);
+                continue;
+            }
 
             bool queued = false;
             bool saturated = false;
