@@ -79,8 +79,11 @@ filetime_ticks_to_unix_milliseconds(std::uint64_t ticks) noexcept {
 
 std::optional<std::uint64_t>
 unix_milliseconds_to_filetime_ticks(std::uint64_t milliseconds) noexcept {
-    constexpr auto maxValue = std::numeric_limits<std::uint64_t>::max();
-    if (milliseconds > (maxValue - kWindowsToUnixEpoch100ns) / 10000ULL) {
+    // FILE_BASIC_INFO stores timestamps in signed LARGE_INTEGER fields.
+    constexpr auto maxFileTimeTicks =
+        static_cast<std::uint64_t>(std::numeric_limits<LONGLONG>::max());
+    if (milliseconds >
+        (maxFileTimeTicks - kWindowsToUnixEpoch100ns) / 10000ULL) {
         return std::nullopt;
     }
     return kWindowsToUnixEpoch100ns + milliseconds * 10000ULL;
