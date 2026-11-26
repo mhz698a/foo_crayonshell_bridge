@@ -26,6 +26,17 @@ inline bool parse_route_index(std::string_view value,
     output = parsed;
     return true;
 }
+
+inline bool is_lower_hex_job_id(std::string_view value) noexcept {
+    if (value.size() != 32) return false;
+    for (const char ch : value) {
+        if (!((ch >= '0' && ch <= '9') ||
+              (ch >= 'a' && ch <= 'f'))) {
+            return false;
+        }
+    }
+    return true;
+}
 } // namespace detail
 
 // Only the canonical route is accepted. Query strings, encoded separators,
@@ -57,6 +68,19 @@ inline bool parse_route_index(std::string_view value,
     }
 
     output = parsed;
+    return true;
+}
+
+[[nodiscard]] inline bool parse_timestamp_job_route(
+    std::string_view target,
+    std::string_view& job_id) noexcept {
+    constexpr std::string_view prefix = "/api/v1/jobs/";
+    if (!target.starts_with(prefix)) return false;
+
+    const auto candidate = target.substr(prefix.size());
+    if (!detail::is_lower_hex_job_id(candidate)) return false;
+
+    job_id = candidate;
     return true;
 }
 

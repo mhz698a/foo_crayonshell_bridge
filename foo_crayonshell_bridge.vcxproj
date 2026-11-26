@@ -133,6 +133,8 @@
     <ClCompile Include="src\api_router.cpp" />
     <ClCompile Include="src\file_creation_time.cpp" />
     <ClCompile Include="src\playlist_item_creation_time.cpp" />
+    <ClCompile Include="src\timestamp_update_json.cpp" />
+    <ClCompile Include="src\timestamp_job_manager.cpp" />
     <ClCompile Include="src\http_request_parser.cpp" />
     <ClCompile Include="src\http_server.cpp" />
     <ClCompile Include="vendor\llhttp\src\llhttp.c">
@@ -150,6 +152,8 @@
     <ClInclude Include="src\http_server.h" />
     <ClInclude Include="src\file_creation_time.h" />
     <ClInclude Include="src\playlist_item_creation_time.h" />
+    <ClInclude Include="src\timestamp_update_json.h" />
+    <ClInclude Include="src\timestamp_job_manager.h" />
     <ClInclude Include="src\version.h" />
   </ItemGroup>
 

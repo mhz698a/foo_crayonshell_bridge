@@ -87,8 +87,13 @@
     <ClCompile Include="..\src\file_creation_time.cpp" />
     <ClCompile Include="http_request_parser_tests.cpp" />
     <ClCompile Include="http_server_tests.cpp" />
+    <ClCompile Include="api_route_parser_tests.cpp" />
+    <ClCompile Include="timestamp_update_json_tests.cpp" />
+    <ClCompile Include="timestamp_job_manager_tests.cpp" />
     <ClCompile Include="..\src\http_request_parser.cpp" />
     <ClCompile Include="..\src\http_server.cpp" />
+    <ClCompile Include="..\src\timestamp_update_json.cpp" />
+    <ClCompile Include="..\src\timestamp_job_manager.cpp" />
     <ClCompile Include="..\vendor\llhttp\src\llhttp.c">
       <CompileAs>CompileAsC</CompileAs>
     </ClCompile>

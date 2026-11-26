@@ -37,14 +37,25 @@ public:
                     return api_->handle(request);
                 });
 
-            // Winsock startup, socket creation/bind, token generation and
-            // creation of the HTTP worker/listener threads must not run inside
-            // foobar2000's initialization callback on the UI thread.
+            // Job workers and the Winsock listener are created away from
+            // foobar2000's UI-thread initialization callback.
             startup_thread_ = std::thread([this] {
                 if (shutting_down_.load()) return;
 
+                if (!api_->start()) {
+                    OutputDebugStringA(
+                        "foo_crayonshell_bridge: timestamp job workers failed to start.\n");
+                    return;
+                }
+
+                if (shutting_down_.load()) {
+                    api_->stop();
+                    return;
+                }
+
                 const auto started = server_->start();
                 if (!started.success) {
+                    api_->stop();
                     OutputDebugStringA(
                         "foo_crayonshell_bridge: HTTP service startup failed.\n");
                     return;
@@ -53,6 +64,7 @@ public:
                 // Handles a shutdown requested while start() was in progress.
                 if (shutting_down_.load()) {
                     server_->stop();
+                    api_->stop();
                 }
 
                 // Port/token remain private until the trusted
@@ -63,14 +75,15 @@ public:
             if (api_) api_->begin_shutdown();
             if (startup_thread_.joinable()) startup_thread_.join();
             if (server_) server_->stop();
+            if (api_) api_->stop();
             server_.reset();
             api_.reset();
         }
     }
 
     void on_quit() override {
-        // Prevent new route work first, then wait for an in-progress startup
-        // operation to finish before stopping/destroying the server.
+        // Prevent new route work first, then stop HTTP handlers before joining
+        // filesystem job workers. Running SetFileTime calls are allowed to finish.
         shutting_down_.store(true);
         if (api_) api_->begin_shutdown();
 
@@ -79,6 +92,7 @@ public:
         }
 
         if (server_) server_->stop();
+        if (api_) api_->stop();
         server_.reset();
         api_.reset();
     }

@@ -1,153 +1,123 @@
 # HTTP API v1
 
-This contract describes the implemented read-only slice and the planned write/job surface. An endpoint is not considered available until its implementation and tests are present.
+This contract describes the implemented local API. All routes are served from the loopback base URL http://127.0.0.1:<ephemeral-port>/api/v1.
 
-## Transport
+## Transport and security
 
-- Base URL: `http://127.0.0.1:<ephemeral-port>/api/v1`.
-- HTTP/1.1, JSON UTF-8, one request per TCP connection.
-- `Connection: close`, no keep-alive, no upgrades, no CONNECT.
-- Every route requires `Authorization: Bearer <instance-token>`.
+- HTTP/1.1, UTF-8 JSON, one request per TCP connection.
+- Connection close; no keep-alive, upgrades or CONNECT.
+- Every route requires Authorization: Bearer <instance-token>.
 - Exact production WebView2 origin or explicitly enabled Vite development origin only.
-- No arbitrary filesystem paths, token query parameters or unauthenticated descriptor endpoint.
+- The listener binds exclusively to 127.0.0.1.
+- No arbitrary filesystem paths, token query parameters or unauthenticated service descriptor endpoint.
 
 ## Common response envelope
 
 Success:
 
-```json
-{
-  "success": true,
-  "data": {}
-}
-```
+    {
+      "success": true,
+      "data": {}
+    }
 
 Failure:
 
-```json
-{
-  "success": false,
-  "error": {
-    "code": "INVALID_PLAYLIST_INDEX",
-    "message": "The requested playlist does not exist."
-  }
-}
-```
+    {
+      "success": false,
+      "error": {
+        "code": "INVALID_PLAYLIST_INDEX",
+        "message": "The requested playlist does not exist."
+      }
+    }
 
 Messages do not disclose filesystem paths, tokens or internal details. Error codes are stable machine-readable identifiers.
 
-## Implemented read-only endpoints
+## GET /system/health
 
-### GET /system/health
+Returns protocol/component version, service uptime and implemented capability flags.
 
-Returns protocol and component version, service uptime and capability flags.
-
-```json
-{
-  "success": true,
-  "data": {
-    "protocolVersion": 1,
-    "componentVersion": "0.1.0",
-    "uptimeMs": 12000,
-    "capabilities": {
-      "readCreationTime": true,
-      "writeCreationTime": false,
-      "readLastAccessTime": true,
-      "writeLastAccessTime": false,
-      "readLastWriteTime": true,
-      "writeLastWriteTime": false,
-      "readChangeTime": true,
-      "writeChangeTime": false,
-      "metadbRefresh": false
+    {
+      "success": true,
+      "data": {
+        "protocolVersion": 1,
+        "componentVersion": "0.1.0",
+        "uptimeMs": 12000,
+        "capabilities": {
+          "readCreationTime": true,
+          "writeCreationTime": true,
+          "readLastAccessTime": true,
+          "writeLastAccessTime": true,
+          "readLastWriteTime": true,
+          "writeLastWriteTime": true,
+          "readChangeTime": true,
+          "writeChangeTime": false,
+          "metadbRefresh": false
+        }
+      }
     }
-  }
-}
-```
 
-Capability flags describe implemented routes. Filesystem-specific read failures are reported per item/field.
+The write flags describe the API's implemented capability. An individual filesystem write can still fail because of permissions, sharing mode, media removal or filesystem limitations.
 
-### GET /playlists/{playlistIndex}/items/{itemIndex}/timestamps
+## GET /playlists/{playlistIndex}/items/{itemIndex}/timestamps
 
 Accepts non-negative decimal playlist and item indices. The route resolves the row through foobar2000's playlist manager and never accepts a caller-supplied path.
 
-```json
-{
-  "success": true,
-  "data": {
-    "playlistIndex": 0,
-    "itemIndex": 0,
-    "timestamps": {
-      "creationTime": {
-        "supported": true,
-        "readable": true,
-        "writable": false,
-        "unixMilliseconds": 1795600000000
-      },
-      "lastAccessTime": {
-        "supported": true,
-        "readable": true,
-        "writable": false,
-        "unixMilliseconds": 1795600000000
-      },
-      "lastWriteTime": {
-        "supported": true,
-        "readable": true,
-        "writable": false,
-        "unixMilliseconds": 1795600000000
-      },
-      "changeTime": {
-        "supported": true,
-        "readable": true,
-        "writable": false,
-        "unixMilliseconds": 1795600000000
+The response returns creationTime, lastAccessTime, lastWriteTime and Windows changeTime as Unix milliseconds. The first three fields are writable. changeTime is read-only.
+
+The HTTP worker asks foobar2000's main-thread callback queue to resolve playlist coordinates. That callback performs only SDK work and copies the physical path. Windows file-attribute I/O runs outside the UI thread. The physical path is never returned.
+
+## PATCH /playlists/{playlistIndex}/items/{itemIndex}/timestamps
+
+Accepts Content-Type: application/json. The body must be a JSON object containing one or more of the following fields:
+
+    {
+      "creationTime": 1700000000000,
+      "lastAccessTime": 1700000001000,
+      "lastWriteTime": 1700000002000
+    }
+
+Only fields present in the request are changed. Values are unsigned Unix milliseconds and must fit the signed Windows FILETIME range. Duplicate keys, unknown fields, strings, negative values, decimals, exponents, nulls and out-of-range timestamps are rejected. A changeTime field is explicitly rejected with 422 TIMESTAMP_FIELD_NOT_WRITABLE.
+
+The route first resolves the playlist row through the SDK main-thread queue and captures its physical path internally. The write is then queued for a dedicated filesystem worker. The response is 202 Accepted:
+
+    {
+      "success": true,
+      "data": {
+        "jobId": "0123456789abcdef0123456789abcdef",
+        "status": "queued",
+        "playlistIndex": 0,
+        "itemIndex": 0,
+        "statusUrl": "/api/v1/jobs/0123456789abcdef0123456789abcdef"
       }
     }
-  }
-}
-```
 
-The example illustrates the schema. Real values come from `GetFileInformationByHandleEx(FileBasicInfo)`; a field with no representable value is returned with `readable: false` and `TIMESTAMP_UNAVAILABLE`. The physical path is never returned.
+The opaque job identifier is generated using Windows CNG. The response and job status never expose the physical path.
 
-Playlist lookup runs on foobar2000's main thread through the SDK callback queue. The callback only resolves the selected `metadb_handle` and copies its physical path. Windows file attribute I/O runs on an HTTP worker, not the UI thread. A timed-out SDK dispatch returns `503 SDK_DISPATCH_TIMEOUT`.
+## GET /jobs/{jobId}
 
-### Error codes for read endpoints
+Returns queued, running, succeeded, completed_unverified, failed or cancelled.
 
-- `UNAUTHORIZED`
-- `ORIGIN_NOT_ALLOWED`
-- `INVALID_HOST`
-- `INVALID_PLAYLIST_INDEX`
-- `INVALID_ITEM_INDEX`
-- `INVALID_PLAYLIST_COORDINATES`
-- `SDK_DISPATCH_TIMEOUT`
-- `SDK_THREAD_VIOLATION`
-- `FILE_ACCESS_DENIED`
-- `FILE_NOT_FOUND`
-- `ITEM_NOT_SUPPORTED`
-- `FILE_METADATA_READ_FAILED`
-- `ROUTE_NOT_FOUND`
-- `METHOD_NOT_ALLOWED`
-- `SERVICE_STOPPING`
-- `INTERNAL_ERROR`
+A completed job reports whether SetFileTime succeeded, whether readback succeeded, the Windows error codes, and the actual timestamps read back from the file. A successful write with failed readback is reported as completed_unverified, not as a verified success.
 
-## Planned, not yet implemented
+The job manager has two workers, a queue capacity of sixteen waiting jobs and a bounded history of 128 records. Older terminal records may be evicted when the history reaches its limit.
 
-### PATCH /playlists/{playlistIndex}/items/{itemIndex}/timestamps
+## DELETE /jobs/{jobId}
 
-The write route will accept only explicitly supported timestamp fields and will return a bounded job identifier when execution is asynchronous. It is not implemented in the current read-only phase.
+Cancellation succeeds only while a job is still queued. Once a worker has changed the state to running, the filesystem operation is not cancellable. Running jobs return 409 JOB_ALREADY_RUNNING; terminal jobs return 409 JOB_ALREADY_COMPLETED.
 
-### GET /jobs/{jobId} and DELETE /jobs/{jobId}
-
-The job manager is not implemented yet. Cancellation will only be accepted while a job remains queued; an OS or SDK operation that has begun will not be reported as cancelled.
+When the component shuts down, queued jobs are marked cancelled. A filesystem operation that has already started is allowed to finish before its owned worker thread is joined.
 
 ## Timestamp terminology
 
-- `creationTime`: Windows creation time.
-- `lastAccessTime`: Windows last-access time.
-- `lastWriteTime`: Windows last-write time.
-- `changeTime`: Windows ChangeTime, not POSIX ctime; read-only.
+- creationTime: Windows creation time.
+- lastAccessTime: Windows last-access time.
+- lastWriteTime: Windows last-write time.
+- changeTime: Windows ChangeTime, not POSIX ctime; read-only.
 
-Values are Unix milliseconds on the wire. FILETIME precision is retained internally until serialization. Missing or out-of-range values are not fabricated as zero.
+Values on the wire are Unix milliseconds. FILETIME precision is retained internally until serialization. Missing or out-of-range values are never fabricated as zero.
 
 ## metadb consistency
 
-A filesystem timestamp operation and a foobar2000 metadb refresh are independent outcomes. The component never edits foobar2000's database files. The first release leaves `metadbRefresh: false`; Phase D will verify whether a timestamp-only change requires any supported metadb notification before enabling it.
+A filesystem timestamp write and a foobar2000 metadb update are independent outcomes. The component never edits foobar2000 database files. metadbRefresh remains false and each job reports metadbRefresh.status as not_attempted.
+
+A timestamp-only write has not yet been demonstrated to require a metadb notification in the installed host. No unsupported notification or full tag reload is issued speculatively. This capability will remain disabled until runtime testing establishes a need and a supported SDK mechanism.
