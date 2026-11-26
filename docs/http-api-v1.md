@@ -65,7 +65,7 @@ Accepts non-negative decimal playlist and item indices. The route resolves the r
 
 The response returns the file size in bytes as `fileSizeBytes`, plus creationTime, lastAccessTime, lastWriteTime and Windows changeTime as Unix milliseconds. The preferred read uses `GetFileInformationByHandleEx(FileBasicInfo)` and `FileStandardInfo`; where those structures are unavailable, the component falls back to `GetFileInformationByHandle` and preserves the file size and the three standard timestamps. In fallback mode ChangeTime is unavailable rather than being substituted with another date. File size is never derived from Title Formatting. The first three fields are writable. changeTime is read-only.
 
-The HTTP worker asks foobar2000's main-thread callback queue to resolve playlist coordinates. That callback performs only SDK work and copies the physical path. Windows file-attribute I/O runs outside the UI thread. The physical path is never returned.
+The HTTP worker asks foobar2000's main-thread callback queue to resolve playlist coordinates. That callback uses `filesystem::g_get_native_path()` to convert foobar2000's canonical location into a native Windows path. Items without a native path (such as streams and virtual locations) are rejected with `422 ITEM_HAS_NO_NATIVE_PATH`; their foobar2000 URI is never passed to `CreateFileW`. Windows file-attribute I/O runs outside the UI thread. The physical path is never returned.
 
 ## PATCH /playlists/{playlistIndex}/items/{itemIndex}/timestamps
 
