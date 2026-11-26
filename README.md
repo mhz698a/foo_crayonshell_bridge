@@ -8,8 +8,10 @@ The repository currently contains the initial x86/x64 component scaffold and a t
 
 Existing implementation:
 
-- A read-only FILETIME query using `GetFileAttributesExW`.
-- Conversion from Windows FILETIME ticks to Unix milliseconds.
+- A Windows `FILE_BASIC_INFO` timestamp reader for creation, last-access, last-write, and change times.
+- A `SetFileTime` writer for creation, last-access, and last-write times; Windows change time is explicitly rejected as unsupported.
+- Conversion between Windows FILETIME ticks and Unix milliseconds, including overflow validation.
+- Readback of actual timestamp values after writes, with write success and readback success reported separately.
 - A playlist-index lookup that retrieves the foobar2000 `metadb_handle` and resolves its physical path on the SDK-required thread.
 - Windows unit tests for epoch conversion, existing files, missing files, empty paths, and directories.
 - GitHub Actions builds and runs tests for Win32 (x86) and x64, then packages both binaries in one `.fb2k-component`.
