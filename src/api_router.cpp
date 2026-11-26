@@ -237,43 +237,68 @@ http::HttpResponse resolve_error_response(const ResolveDispatchResult& resolved)
 
 http::HttpResponse filesystem_error_response(DWORD error,
                                              bool writing) {
+    unsigned int status = 500;
+    std::string_view code = writing
+        ? "FILE_METADATA_WRITE_FAILED"
+        : "FILE_METADATA_READ_FAILED";
+    std::string_view message = writing
+        ? "Windows could not update the media file attributes."
+        : "Windows could not read the media file attributes.";
+
     switch (error) {
     case ERROR_FILE_NOT_FOUND:
     case ERROR_PATH_NOT_FOUND:
-        return error_response(
-            404, "FILE_NOT_FOUND",
-            "The media file referenced by the playlist item was not found.");
+        status = 404;
+        code = "FILE_NOT_FOUND";
+        message = "The media file referenced by the playlist item was not found.";
+        break;
 
     case ERROR_ACCESS_DENIED:
     case ERROR_SHARING_VIOLATION:
-        return error_response(
-            403, "FILE_ACCESS_DENIED",
-            "Windows denied access to the media file attributes.");
+        status = 403;
+        code = "FILE_ACCESS_DENIED";
+        message = "Windows denied access to the media file attributes.";
+        break;
 
     case ERROR_DIRECTORY:
-        return error_response(
-            422, "ITEM_NOT_SUPPORTED",
-            "The selected playlist item does not resolve to a media file.");
+        status = 422;
+        code = "ITEM_NOT_SUPPORTED";
+        message = "The selected playlist item does not resolve to a media file.";
+        break;
 
     case ERROR_NOT_SUPPORTED:
-        return error_response(
-            422, "TIMESTAMP_FIELD_NOT_WRITABLE",
-            "The requested Windows timestamp field cannot be written.");
+        status = 422;
+        code = writing
+            ? "TIMESTAMP_FIELD_NOT_WRITABLE"
+            : "FILE_METADATA_NOT_SUPPORTED";
+        message = writing
+            ? "The requested Windows timestamp field cannot be written."
+            : "The file system does not support reading these media file attributes.";
+        break;
 
     case ERROR_INVALID_PARAMETER:
     case ERROR_ARITHMETIC_OVERFLOW:
-        return error_response(
-            400, "INVALID_TIMESTAMP",
-            "A timestamp value is outside the supported Windows FILETIME range.");
+        if (writing) {
+            status = 400;
+            code = "INVALID_TIMESTAMP";
+            message = "A timestamp value is outside the supported Windows FILETIME range.";
+        }
+        break;
 
     default:
-        return error_response(
-            500,
-            writing ? "FILE_METADATA_WRITE_FAILED" : "FILE_METADATA_READ_FAILED",
-            writing
-                ? "Windows could not update the media file attributes."
-                : "Windows could not read the media file attributes.");
+        break;
     }
+
+    // Preserve the native Windows error code without returning the physical
+    // path. This distinguishes unsupported providers, offline files and other
+    // file-system failures that otherwise collapse into one generic message.
+    std::string body =
+        "{\"success\":false,\"error\":{\"code\":\"" +
+        std::string(code) + "\",\"message\":\"" +
+        std::string(message) + "\",\"win32Error\":";
+    body += std::to_string(error);
+    body += "}}";
+    return {status, std::move(body)};
 }
 
 bool header_name_equals(std::string_view left,
