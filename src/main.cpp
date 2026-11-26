@@ -2,10 +2,14 @@
 
 #include "api_router.h"
 #include "http_server.h"
+#include "service_descriptor.h"
 #include "version.h"
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <thread>
 
 DECLARE_COMPONENT_VERSION(
@@ -37,8 +41,8 @@ public:
                     return api_->handle(request);
                 });
 
-            // Job workers and the Winsock listener are created away from
-            // foobar2000's UI-thread initialization callback.
+            // Job workers, the Winsock listener and descriptor publication
+            // run away from foobar2000's UI-thread initialization callback.
             startup_thread_ = std::thread([this] {
                 if (shutting_down_.load()) return;
 
@@ -61,19 +65,60 @@ public:
                     return;
                 }
 
-                // Handles a shutdown requested while start() was in progress.
-                if (shutting_down_.load()) {
+                // Publish only after the listener is live. The descriptor is
+                // private to this Windows user and scoped to this process ID.
+                unsigned long descriptor_error = ERROR_SUCCESS;
+                if (!descriptor_publisher_.publish(
+                        started.port, started.bearer_token, descriptor_error)) {
                     server_->stop();
                     api_->stop();
+                    OutputDebugStringA(
+                        "foo_crayonshell_bridge: secure service descriptor publication failed.\n");
+                    return;
                 }
 
-                // Port/token remain private until the trusted
-                // foo_ui_webview2 bootstrap is implemented and verified.
+                // Never leave an advertised, stopped service during shutdown.
+                if (shutting_down_.load()) {
+                    descriptor_publisher_.remove_if_owned();
+                    server_->stop();
+                    api_->stop();
+                    return;
+                }
+
+                try {
+                    descriptor_refresh_thread_ = std::thread(
+                        [this, port = started.port, token = started.bearer_token] {
+                            std::unique_lock lock(descriptor_refresh_mutex_);
+                            while (!descriptor_refresh_condition_.wait_for(
+                                lock, std::chrono::hours(6),
+                                [this] { return shutting_down_.load(); })) {
+                                lock.unlock();
+
+                                unsigned long refresh_error = ERROR_SUCCESS;
+                                if (!descriptor_publisher_.publish(
+                                        port, token, refresh_error)) {
+                                    OutputDebugStringA(
+                                        "foo_crayonshell_bridge: service descriptor refresh failed.\n");
+                                }
+
+                                lock.lock();
+                            }
+                        });
+                } catch (...) {
+                    descriptor_publisher_.remove_if_owned();
+                    server_->stop();
+                    api_->stop();
+                    OutputDebugStringA(
+                        "foo_crayonshell_bridge: descriptor refresh worker failed to start.\n");
+                }
             });
         } catch (...) {
             shutting_down_.store(true);
+            descriptor_refresh_condition_.notify_all();
             if (api_) api_->begin_shutdown();
             if (startup_thread_.joinable()) startup_thread_.join();
+            if (descriptor_refresh_thread_.joinable()) descriptor_refresh_thread_.join();
+            descriptor_publisher_.remove_if_owned();
             if (server_) server_->stop();
             if (api_) api_->stop();
             server_.reset();
@@ -82,15 +127,21 @@ public:
     }
 
     void on_quit() override {
-        // Prevent new route work first, then stop HTTP handlers before joining
-        // filesystem job workers. Running SetFileTime calls are allowed to finish.
+        // Stop route work and descriptor refresh, then remove the descriptor
+        // before stopping the HTTP listener.
         shutting_down_.store(true);
+        descriptor_refresh_condition_.notify_all();
         if (api_) api_->begin_shutdown();
 
         if (startup_thread_.joinable()) {
             startup_thread_.join();
         }
+        descriptor_refresh_condition_.notify_all();
+        if (descriptor_refresh_thread_.joinable()) {
+            descriptor_refresh_thread_.join();
+        }
 
+        descriptor_publisher_.remove_if_owned();
         if (server_) server_->stop();
         if (api_) api_->stop();
         server_.reset();
@@ -101,7 +152,11 @@ private:
     std::atomic<bool> shutting_down_{false};
     std::unique_ptr<api::ApiController> api_;
     std::unique_ptr<http::HttpServer> server_;
+    bootstrap::ServiceDescriptorPublisher descriptor_publisher_;
     std::thread startup_thread_;
+    std::thread descriptor_refresh_thread_;
+    std::mutex descriptor_refresh_mutex_;
+    std::condition_variable descriptor_refresh_condition_;
 };
 
 } // namespace craybridge
