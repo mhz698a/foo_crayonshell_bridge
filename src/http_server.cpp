@@ -286,9 +286,11 @@ struct HttpServer::Impl {
         std::lock_guard<std::mutex> lifecycle_lock(lifecycle_mutex);
 
         HttpServerStartResult result{};
-        if (is_running.load()) {
+        if (is_running.load() || winsock_started ||
+            listen_socket != INVALID_SOCKET ||
+            listener_thread.joinable() || !workers.empty()) {
             result.error_code = ERROR_ALREADY_INITIALIZED;
-            result.error_message = "The local HTTP service is already running.";
+            result.error_message = "The local HTTP service is already running or awaiting shutdown.";
             return result;
         }
 
@@ -385,7 +387,6 @@ struct HttpServer::Impl {
 
         const auto selected_port = ntohs(bound_address.sin_port);
         bound_port.store(selected_port);
-        expected_host = "127.0.0.1:" + std::to_string(selected_port);
 
         try {
             expected_host = "127.0.0.1:" + std::to_string(selected_port);
@@ -642,7 +643,7 @@ struct HttpServer::Impl {
             "\r\n"
             "{\"success\":false,\"error\":{\"code\":\"SERVICE_BUSY\","
             "\"message\":\"The local service is busy.\"}}";
-        send_all(socket, response);
+        send_all(socket, response, 100);
     }
 
     void worker_loop() noexcept {
