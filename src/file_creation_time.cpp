@@ -42,6 +42,14 @@ TimestampQueryResult read_timestamps(HANDLE file) noexcept {
         return result;
     }
 
+    FILE_STANDARD_INFO standardInfo{};
+    if (::GetFileInformationByHandleEx(
+            file, FileStandardInfo, &standardInfo, sizeof(standardInfo)) &&
+        standardInfo.EndOfFile.QuadPart >= 0) {
+        result.timestamps.size_bytes =
+            static_cast<std::uint64_t>(standardInfo.EndOfFile.QuadPart);
+    }
+
     result.timestamps.creation_time =
         signed_filetime_to_unix_milliseconds(basicInfo.CreationTime);
     result.timestamps.last_access_time =

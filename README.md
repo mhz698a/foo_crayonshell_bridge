@@ -12,6 +12,7 @@ The current feature branch contains:
 - GET /api/v1/playlists/{playlistIndex}/items/{itemIndex}/timestamps.
 - PATCH /api/v1/playlists/{playlistIndex}/items/{itemIndex}/timestamps for Windows creation, last-access and last-write times.
 - Asynchronous timestamp jobs with bounded workers/queue, opaque job IDs, status polling and queued-only cancellation.
+- File size in bytes read from Windows `FileStandardInfo`, independently of foobar2000 Title Formatting.
 - Windows ChangeTime reads; ChangeTime writes are explicitly unsupported.
 - Readback of actual timestamp values after writes.
 - x86 and x64 build/test/package automation.

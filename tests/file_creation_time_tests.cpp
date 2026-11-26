@@ -114,6 +114,45 @@ void test_existing_file_timestamps() {
     ::DeleteFileW(tempFile);
 }
 
+void test_file_size_bytes() {
+    wchar_t tempFile[MAX_PATH]{};
+    if (!create_temp_file(tempFile)) return;
+
+    constexpr char payload[] = "CrayonShell-size-check";
+    HANDLE file = ::CreateFileW(
+        tempFile,
+        GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr);
+    expect(file != INVALID_HANDLE_VALUE,
+           "temporary file must open for file-size test");
+
+    if (file != INVALID_HANDLE_VALUE) {
+        DWORD written = 0;
+        expect(::WriteFile(
+                   file, payload, static_cast<DWORD>(sizeof(payload) - 1),
+                   &written, nullptr) != FALSE,
+               "known-size payload must be written");
+        expect(written == sizeof(payload) - 1,
+               "the complete known-size payload must be written");
+        ::CloseHandle(file);
+    }
+
+    const auto result = craybridge::file_time::query_file_timestamps(tempFile);
+    expect(result.success, "file-size query must succeed for an existing file");
+    expect(result.timestamps.size_bytes.has_value(),
+           "file size must be returned when FileStandardInfo is readable");
+    if (result.timestamps.size_bytes.has_value()) {
+        expect(*result.timestamps.size_bytes == sizeof(payload) - 1,
+               "reported byte size must match the actual file length");
+    }
+
+    ::DeleteFileW(tempFile);
+}
+
 void test_write_supported_timestamps() {
     wchar_t tempFile[MAX_PATH]{};
     if (!create_temp_file(tempFile)) return;
@@ -204,6 +243,7 @@ int run_file_creation_time_tests() {
     test_epoch_conversion();
     test_empty_path();
     test_existing_file_timestamps();
+    test_file_size_bytes();
     test_write_supported_timestamps();
     test_change_time_is_read_only();
     test_missing_file();

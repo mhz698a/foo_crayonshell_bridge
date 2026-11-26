@@ -24,6 +24,7 @@ struct QueryResult {
 };
 
 struct FileTimestamps {
+    std::optional<std::uint64_t> size_bytes;
     std::optional<std::uint64_t> creation_time;
     std::optional<std::uint64_t> last_access_time;
     std::optional<std::uint64_t> last_write_time;

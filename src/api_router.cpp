@@ -446,6 +446,7 @@ http::HttpResponse ApiController::health() const {
     body += std::to_string(uptime);
     body +=
         ",\"capabilities\":{"
+        "\\\"readFileSize\\\":true,"
         "\"readCreationTime\":true,"
         "\"writeCreationTime\":true,"
         "\"readLastAccessTime\":true,"
@@ -487,6 +488,10 @@ http::HttpResponse ApiController::read_playlist_timestamps(
     body += std::to_string(playlist_index);
     body += ",\"itemIndex\":";
     body += std::to_string(item_index);
+    body += ",\\"fileSizeBytes\\":";
+    body += timestamps.timestamps.size_bytes.has_value()
+        ? std::to_string(*timestamps.timestamps.size_bytes)
+        : "null";
     body += ",\"timestamps\":{";
     body += timestamp_field("creationTime",
                             timestamps.timestamps.creation_time, true);

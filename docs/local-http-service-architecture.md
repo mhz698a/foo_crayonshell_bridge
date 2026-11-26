@@ -10,7 +10,7 @@ No arbitrary filesystem paths are accepted from the frontend. Playlist coordinat
 
 ## Filesystem timestamp layer
 
-- Reads CreationTime, LastAccessTime, LastWriteTime and Windows ChangeTime through GetFileInformationByHandleEx(FileBasicInfo).
+- Reads file size through GetFileInformationByHandleEx(FileStandardInfo), and CreationTime, LastAccessTime, LastWriteTime and Windows ChangeTime through GetFileInformationByHandleEx(FileBasicInfo).
 - Resolves a playlist row on the main thread into a retained metadb_handle_ptr and copied physical path.
 - Preserves the exact CUE/subsong identity while the lookup result is retained.
 - Writes CreationTime, LastAccessTime and LastWriteTime through SetFileTime; ChangeTime writes are rejected.
@@ -36,7 +36,7 @@ The parser dependency is pinned to nodejs/llhttp release v9.4.4, commit prefix 8
 ## Read API
 
 - GET /api/v1/system/health: protocol/component version, uptime and implemented capability flags.
-- GET /api/v1/playlists/{playlistIndex}/items/{itemIndex}/timestamps: resolve a playlist item through the SDK and return its filesystem timestamps.
+- GET /api/v1/playlists/{playlistIndex}/items/{itemIndex}/timestamps: resolve a playlist item through the SDK and return its filesystem size and timestamps.
 
 The HTTP worker asks foobar2000's main-thread callback queue to resolve playlist coordinates. That callback performs only SDK work and copies the physical path; it never opens the file. The worker then calls the Windows file-attribute helper outside the UI thread. The route never returns a physical path or database internals.
 

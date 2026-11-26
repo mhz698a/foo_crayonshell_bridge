@@ -43,6 +43,7 @@ Returns protocol/component version, service uptime and implemented capability fl
         "componentVersion": "0.1.0",
         "uptimeMs": 12000,
         "capabilities": {
+          "readFileSize": true,
           "readCreationTime": true,
           "writeCreationTime": true,
           "readLastAccessTime": true,
@@ -62,7 +63,7 @@ The write flags describe the API's implemented capability. An individual filesys
 
 Accepts non-negative decimal playlist and item indices. The route resolves the row through foobar2000's playlist manager and never accepts a caller-supplied path.
 
-The response returns creationTime, lastAccessTime, lastWriteTime and Windows changeTime as Unix milliseconds. The first three fields are writable. changeTime is read-only.
+The response returns the file size in bytes as `fileSizeBytes`, plus creationTime, lastAccessTime, lastWriteTime and Windows changeTime as Unix milliseconds. File size is read with `GetFileInformationByHandleEx(FileStandardInfo)`; it is not derived from Title Formatting. The first three fields are writable. changeTime is read-only.
 
 The HTTP worker asks foobar2000's main-thread callback queue to resolve playlist coordinates. That callback performs only SDK work and copies the physical path. Windows file-attribute I/O runs outside the UI thread. The physical path is never returned.
 
@@ -111,8 +112,9 @@ When the component shuts down, queued jobs are marked cancelled. A filesystem op
 
 - creationTime: Windows creation time.
 - lastAccessTime: Windows last-access time.
-- lastWriteTime: Windows last-write time.
-- changeTime: Windows ChangeTime, not POSIX ctime; read-only.
+- lastWriteTime: Windows last-write time (mtime).
+- changeTime: Windows ChangeTime, corresponding to NTFS metadata-change time; it is not creation time and is read-only.
+- fileSizeBytes: current stream length, as a non-negative integer byte count.
 
 Values on the wire are Unix milliseconds. FILETIME precision is retained internally until serialization. Missing or out-of-range values are never fabricated as zero.
 
