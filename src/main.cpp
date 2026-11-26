@@ -21,12 +21,39 @@ DECLARE_COMPONENT_VERSION(
 VALIDATE_COMPONENT_FILENAME("foo_crayonshell_bridge.dll");
 
 namespace craybridge {
+namespace {
+
+std::filesystem::path get_profile_root_path() {
+    pfc::string8 profile_path;
+    filesystem::g_get_display_path(core_api::get_profile_path(), profile_path);
+
+    const char* utf8_path = profile_path.get_ptr();
+    if (!utf8_path || *utf8_path == '\0') return {};
+
+    const auto wide_path = pfc::stringcvt::string_wide_from_utf8(utf8_path);
+    if (!wide_path.get_ptr() || *wide_path.get_ptr() == L'\0') return {};
+    return std::filesystem::path(wide_path.get_ptr());
+}
+
+} // namespace
 
 class BridgeRuntime : public initquit {
 public:
     void on_init() override {
         try {
             shutting_down_.store(false);
+
+            // Resolve the same native profile directory exposed by misc.getProfilePath
+            // before leaving foobar2000's UI-thread initialization callback.
+            const auto profile_root = get_profile_root_path();
+            if (profile_root.empty()) {
+                OutputDebugStringA(
+                    "foo_crayonshell_bridge: unable to resolve the foobar2000 profile directory.\n");
+                return;
+            }
+            descriptor_publisher_ =
+                std::make_unique<bootstrap::ServiceDescriptorPublisher>(profile_root);
+
             api_ = std::make_unique<api::ApiController>();
             server_ = std::make_unique<http::HttpServer>(
                 [this](const http::Request& request) {
@@ -68,7 +95,8 @@ public:
                 // Publish only after the listener is live. The descriptor is
                 // private to this Windows user and scoped to this process ID.
                 unsigned long descriptor_error = ERROR_SUCCESS;
-                if (!descriptor_publisher_.publish(
+                if (!descriptor_publisher_ ||
+                    !descriptor_publisher_->publish(
                         started.port, started.bearer_token, descriptor_error)) {
                     server_->stop();
                     api_->stop();
@@ -79,7 +107,7 @@ public:
 
                 // Never leave an advertised, stopped service during shutdown.
                 if (shutting_down_.load()) {
-                    descriptor_publisher_.remove_if_owned();
+                    if (descriptor_publisher_) descriptor_publisher_->remove_if_owned();
                     server_->stop();
                     api_->stop();
                     return;
@@ -95,7 +123,8 @@ public:
                                 lock.unlock();
 
                                 unsigned long refresh_error = ERROR_SUCCESS;
-                                if (!descriptor_publisher_.publish(
+                                if (!descriptor_publisher_ ||
+                                    !descriptor_publisher_->publish(
                                         port, token, refresh_error)) {
                                     OutputDebugStringA(
                                         "foo_crayonshell_bridge: service descriptor refresh failed.\n");
@@ -105,7 +134,7 @@ public:
                             }
                         });
                 } catch (...) {
-                    descriptor_publisher_.remove_if_owned();
+                    if (descriptor_publisher_) descriptor_publisher_->remove_if_owned();
                     server_->stop();
                     api_->stop();
                     OutputDebugStringA(
@@ -118,7 +147,7 @@ public:
             if (api_) api_->begin_shutdown();
             if (startup_thread_.joinable()) startup_thread_.join();
             if (descriptor_refresh_thread_.joinable()) descriptor_refresh_thread_.join();
-            descriptor_publisher_.remove_if_owned();
+            if (descriptor_publisher_) descriptor_publisher_->remove_if_owned();
             if (server_) server_->stop();
             if (api_) api_->stop();
             server_.reset();
@@ -141,7 +170,7 @@ public:
             descriptor_refresh_thread_.join();
         }
 
-        descriptor_publisher_.remove_if_owned();
+        if (descriptor_publisher_) descriptor_publisher_->remove_if_owned();
         if (server_) server_->stop();
         if (api_) api_->stop();
         server_.reset();
@@ -152,7 +181,7 @@ private:
     std::atomic<bool> shutting_down_{false};
     std::unique_ptr<api::ApiController> api_;
     std::unique_ptr<http::HttpServer> server_;
-    bootstrap::ServiceDescriptorPublisher descriptor_publisher_;
+    std::unique_ptr<bootstrap::ServiceDescriptorPublisher> descriptor_publisher_;
     std::thread startup_thread_;
     std::thread descriptor_refresh_thread_;
     std::mutex descriptor_refresh_mutex_;
