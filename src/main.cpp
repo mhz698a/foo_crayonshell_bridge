@@ -11,6 +11,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <string>
 
 DECLARE_COMPONENT_VERSION(
     "CrayonShell File Properties Bridge",
@@ -30,7 +31,22 @@ std::filesystem::path get_profile_root_path() {
     const char* utf8_path = profile_path.get_ptr();
     if (!utf8_path || *utf8_path == '\0') return {};
 
-    const auto wide_path = pfc::stringcvt::string_wide_from_utf8(utf8_path);
+    std::string native_path(utf8_path);
+    if (native_path.rfind("file://", 0) == 0) {
+        native_path.erase(0, 7);
+        const bool file_uri_drive_root =
+            native_path.size() >= 3 &&
+            native_path[0] == '/' &&
+            ((native_path[1] >= 'A' && native_path[1] <= 'Z') ||
+             (native_path[1] >= 'a' && native_path[1] <= 'z')) &&
+            native_path[2] == ':';
+        if (file_uri_drive_root) native_path.erase(0, 1);
+    }
+    for (char& character : native_path) {
+        if (character == '/') character = '\\\\';
+    }
+
+    const auto wide_path = pfc::stringcvt::string_wide_from_utf8(native_path.c_str());
     if (!wide_path.get_ptr() || *wide_path.get_ptr() == L'\0') return {};
     return std::filesystem::path(wide_path.get_ptr());
 }
