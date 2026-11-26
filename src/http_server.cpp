@@ -946,4 +946,16 @@ std::uint16_t HttpServer::port() const noexcept {
     return impl_ ? impl_->bound_port.load() : 0;
 }
 
+std::size_t HttpServer::queued_connections() const noexcept {
+    if (!impl_) return 0;
+    std::lock_guard<std::mutex> lock(impl_->queue_mutex);
+    return impl_->pending_sockets.size();
+}
+
+std::size_t HttpServer::active_connections() const noexcept {
+    if (!impl_) return 0;
+    std::lock_guard<std::mutex> lock(impl_->queue_mutex);
+    return impl_->active_sockets.size();
+}
+
 } // namespace craybridge::http
