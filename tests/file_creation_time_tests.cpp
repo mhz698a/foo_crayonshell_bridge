@@ -73,7 +73,7 @@ void test_epoch_conversion() {
            "one millisecond must convert back to FILETIME");
 
     const auto overflow =
-        unix_milliseconds_to_filetime_ticks(std::numeric_limits<std::uint64_t>::max());
+        unix_milliseconds_to_filetime_ticks((std::numeric_limits<std::uint64_t>::max)());
     expect(!overflow.has_value(), "overflowing Unix milliseconds must be rejected");
 }
 
