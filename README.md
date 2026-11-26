@@ -6,8 +6,9 @@ A Windows x64 foobar2000 component being developed to expose narrowly scoped fil
 
 The initial scaffold contains:
 
-- A read-only helper for querying a regular file's filesystem creation timestamp.
+- A read-only FILETIME query using GetFileAttributesExW.
 - Conversion from Windows FILETIME ticks to Unix milliseconds.
+- A playlist-index lookup that retrieves the foobar2000 metadb_handle and resolves its physical path on the main thread.
 - Windows unit tests for epoch conversion, existing files, missing files, empty paths, and directories.
 - A GitHub Actions build that compiles the component, runs tests, and packages a .fb2k-component.
 
@@ -26,6 +27,8 @@ On pushes and pull requests, GitHub Actions builds the DLL, runs the helper test
 
 When a version tag such as v0.1.0 is pushed, the workflow also creates a GitHub Release with the .fb2k-component package and its SHA-256 file.
 
+The x64-only package contains one DLL at the archive root and is named with the x64 suffix.
+
 ## Local build
 
 Requirements: Windows, Visual Studio 2022 Build Tools or Visual Studio 2026 with the C++ desktop workload, PowerShell, and Git.
@@ -42,4 +45,4 @@ The generated package is written to dist/.
 
 ## Scope
 
-The component is read-only. It does not edit tags, artwork, or media contents. It will use the foobar2000 playlist item handle as its authority and will not accept arbitrary filesystem paths from the WebView frontend.
+The component is read-only. It does not edit tags, artwork, or media contents. The WebView API will pass only playlist coordinates; it will never be allowed to submit an arbitrary filesystem path.
