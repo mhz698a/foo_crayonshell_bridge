@@ -35,7 +35,7 @@ public:
     [[nodiscard]] const std::filesystem::path& descriptor_path() const noexcept;
 
 private:
-    std::filesystem::path local_app_data_override_;
+    std::filesystem::path profile_root_;
     std::filesystem::path descriptor_path_;
     std::string instance_id_;
 };
