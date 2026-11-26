@@ -13,10 +13,11 @@ Existing implementation:
 - Conversion between Windows FILETIME ticks and Unix milliseconds, including overflow validation.
 - Readback of actual timestamp values after writes, with write success and readback success reported separately.
 - A playlist-index lookup that retrieves the foobar2000 `metadb_handle` and resolves its physical path on the SDK-required thread.
-- Windows unit tests for epoch conversion, existing files, missing files, empty paths, and directories.
+- Windows unit tests for timestamp conversions, file timestamp reads/writes, unsupported ChangeTime writes, missing files, empty paths, and directories.
+- A strict, bounded HTTP/1.1 request parser adapter based on llhttp, with tests for incremental input, Content-Length, chunked bodies, framing conflicts, upgrades, and request limits.
 - GitHub Actions builds and runs tests for Win32 (x86) and x64, then packages both binaries in one `.fb2k-component`.
 
-**The HTTP service is not implemented yet.** The architecture and first API contract are documented in:
+**The HTTP service and Winsock listener are not implemented yet.** The bounded llhttp parser adapter is now integrated into the component and test project definitions. The architecture and first API contract are documented in:
 
 - [Local HTTP service architecture](docs/local-http-service-architecture.md)
 - [HTTP API v1 contract](docs/http-api-v1.md)
@@ -55,14 +56,15 @@ This follows foobar2000's multi-architecture component package convention. The s
 
 Requirements: Windows, Visual Studio 2022 Build Tools or Visual Studio 2026 with the C++ desktop workload, PowerShell, and Git.
 
-The workflow stages the SDK into `vendor/`. To reproduce locally:
+The workflow stages the foobar2000 SDK and llhttp into `vendor/`. For llhttp, it checks out `nodejs/llhttp` at `release/v9.4.4`, verifies commit prefix `8164852`, stages the generated C sources and MIT license, then compiles the C sources with MSVC. No Node.js code generation is required. To reproduce locally:
 
 1. Check out the pinned SDK snapshot from `reupen/foobar2000-sdk-unmodified`.
 2. Copy `foobar2000/SDK`, `foobar2000/helpers`, `foobar2000/shared`, `foobar2000/foobar2000_component_client`, and `pfc` into the same relative structure under `vendor/`.
-3. Build `foo_crayonshell_bridge.vcxproj` in Release / Win32.
-4. Build `foo_crayonshell_bridge.vcxproj` in Release / x64.
-5. Build and run `tests/foo_crayonshell_bridge_tests.vcxproj` in Release / Win32 and Release / x64.
-6. Run `scripts/package-component.ps1`.
+3. Check out `nodejs/llhttp` at `release/v9.4.4`; copy `include/llhttp.h`, `src/llhttp.c`, `src/api.c`, `src/http.c`, and `LICENSE` into `vendor/llhttp/` with the same include/src layout as the workflow.
+4. Build `foo_crayonshell_bridge.vcxproj` in Release / Win32.
+5. Build `foo_crayonshell_bridge.vcxproj` in Release / x64.
+6. Build and run `tests/foo_crayonshell_bridge_tests.vcxproj` in Release / Win32 and Release / x64.
+7. Run `scripts/package-component.ps1`.
 
 The package script requires both `bin/Release_Win32/foo_crayonshell_bridge.dll` and `bin/Release_x64/foo_crayonshell_bridge.dll`; it refuses to create a package if either architecture is missing.
 
