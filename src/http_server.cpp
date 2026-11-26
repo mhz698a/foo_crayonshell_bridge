@@ -862,13 +862,21 @@ struct HttpServer::Impl {
             find_header(request, "Access-Control-Request-Method");
         const auto requested_headers =
             find_header(request, "Access-Control-Request-Headers");
+        const auto requested_private_network =
+            find_header(request, "Access-Control-Request-Private-Network");
+
+        const bool allow_private_network =
+            requested_private_network.value != nullptr &&
+            *requested_private_network.value == "true";
 
         if (requested_method.duplicate ||
             requested_method.value == nullptr ||
             !is_allowed_preflight_method(*requested_method.value) ||
             requested_headers.duplicate ||
             (requested_headers.value != nullptr &&
-             !validate_preflight_headers(*requested_headers.value))) {
+             !validate_preflight_headers(*requested_headers.value)) ||
+            requested_private_network.duplicate ||
+            (requested_private_network.value != nullptr && !allow_private_network)) {
             send_response(
                 socket,
                 403,
@@ -878,7 +886,7 @@ struct HttpServer::Impl {
             return;
         }
 
-        send_response(socket, 204, {}, origin, true);
+        send_response(socket, 204, {}, origin, true, false, allow_private_network);
     }
 
     void send_error(SOCKET socket,
@@ -897,7 +905,8 @@ struct HttpServer::Impl {
                        const std::string& body,
                        std::string_view origin = {},
                        bool preflight = false,
-                       bool unauthorized = false) noexcept {
+                       bool unauthorized = false,
+                       bool allow_private_network = false) noexcept {
         try {
             std::string response;
             response.reserve(512 + body.size());
@@ -926,6 +935,12 @@ struct HttpServer::Impl {
                 response += "Access-Control-Allow-Methods: GET, PATCH, DELETE\r\n";
                 response += "Access-Control-Allow-Headers: Authorization, Content-Type\r\n";
                 response += "Access-Control-Max-Age: 300\r\n";
+            }
+
+            if (allow_private_network) {
+                // Legacy Chromium PNA preflight compatibility. This is emitted
+                // only after the exact request origin has passed the allow-list.
+                response += "Access-Control-Allow-Private-Network: true\r\n";
             }
 
             if (unauthorized) {
