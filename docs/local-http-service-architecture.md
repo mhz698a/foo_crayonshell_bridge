@@ -55,7 +55,7 @@ File writes and readback remain outside the foobar2000 UI thread. Only the playl
 
 ## Frontend origin and bootstrap dependency
 
-CrayonShell's production origin is https://foo-ui-webview2.local/; Vite development uses http://localhost:5173. The exact allowed origins are configured in the transport. No wildcard CORS is used.
+CrayonShell's production origin is https://foo-ui-webview2.local/; Vite development uses http://localhost:5173. The exact allowed origins are `https://foo-ui-webview2.local` and `http://localhost:5173`. No wildcard CORS is used.
 
 The component's port and bearer token are not exposed by an unauthenticated HTTP endpoint and are never written to logs. After the listener starts, the Bridge atomically publishes `<foobar2000-profile>\\foo_crayonshell_bridge\\service.json` with a protected DACL for the current user and LocalSystem. CrayonShell discovers the profile through the existing `misc.getProfilePath` method and reads the descriptor through the existing `file.read` method, which allows reads inside the profile. The Bridge removes the file before listener shutdown and refreshes its 24-hour expiry every six hours. The host's existing WebView2 message gate rejects messages from untrusted origins. No host source changes or new host API are required.
 
