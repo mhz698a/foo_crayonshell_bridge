@@ -170,12 +170,17 @@ TimestampWriteResult write_file_timestamps(
         return result;
     }
 
+    result.success = true;
+    result.win32_error = ERROR_SUCCESS;
+
     const auto actual = read_timestamps(file);
     ::CloseHandle(file);
 
-    result.success = actual.success;
-    result.timestamps = actual.timestamps;
-    result.win32_error = actual.win32_error;
+    result.readback_success = actual.success;
+    result.readback_error = actual.win32_error;
+    if (actual.success) {
+        result.timestamps = actual.timestamps;
+    }
     return result;
 }
 
