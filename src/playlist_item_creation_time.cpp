@@ -1,4 +1,5 @@
 #include <SDK/foobar2000.h>
+#include <SDK/filesystem.h>
 
 #include "playlist_item_creation_time.h"
 
@@ -80,13 +81,27 @@ ItemPathResult resolve_item_path(std::size_t playlist_index,
             return result;
         }
 
-        if (!utf8_to_wide(handle->get_path(),
+        // metadb_handle::get_path() is foobar2000's canonical location,
+        // not guaranteed to be a native Windows path. Normalize it through the
+        // SDK first (e.g. file:// -> C:\\...); streams and virtual locations
+        // without a native path must never be passed to CreateFileW.
+        pfc::string8 native_path;
+        if (!filesystem::g_get_native_path(handle->get_path(), native_path)) {
+            result.win32_error = ERROR_NOT_SUPPORTED;
+            return result;
+        }
+        if (native_path.length() == 0) {
+            result.win32_error = ERROR_INVALID_NAME;
+            return result;
+        }
+
+        if (!utf8_to_wide(native_path.c_str(),
                           result.physical_path,
                           result.win32_error)) {
             return result;
         }
 
-        // Only the copied physical path leaves the main-thread SDK boundary.
+        // Only the normalized native path leaves the main-thread SDK boundary.
         // The retained handle preserves the exact playlist/subsong identity.
         result.handle = handle;
         result.success = true;
