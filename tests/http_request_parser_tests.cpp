@@ -196,7 +196,7 @@ void test_one_request_per_connection() {
 
 } // namespace
 
-int wmain() {
+int run_http_request_parser_tests() {
     test_simple_request();
     test_incremental_request();
     test_content_length_body();

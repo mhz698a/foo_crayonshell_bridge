@@ -200,7 +200,7 @@ void test_directory_is_rejected() {
 
 } // namespace
 
-int wmain() {
+int run_file_creation_time_tests() {
     test_epoch_conversion();
     test_empty_path();
     test_existing_file_timestamps();

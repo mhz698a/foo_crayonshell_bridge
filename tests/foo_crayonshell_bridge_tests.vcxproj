@@ -81,6 +81,7 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
+    <ClCompile Include="test_main.cpp" />
     <ClCompile Include="file_creation_time_tests.cpp" />
     <ClCompile Include="..\src\file_creation_time.cpp" />
     <ClCompile Include="http_request_parser_tests.cpp" />
