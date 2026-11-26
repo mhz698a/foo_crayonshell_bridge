@@ -47,9 +47,11 @@ struct TimestampQueryResult {
 };
 
 struct TimestampWriteResult {
-    bool success = false;
-    FileTimestamps timestamps; // Actual values read back after the write.
+    bool success = false; // SetFileTime completed successfully.
+    bool readback_success = false;
+    FileTimestamps timestamps; // Actual values, when readback_success is true.
     DWORD win32_error = ERROR_SUCCESS;
+    DWORD readback_error = ERROR_SUCCESS;
 };
 
 [[nodiscard]] TimestampQueryResult
