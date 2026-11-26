@@ -1,25 +1,40 @@
-# WebView2 local-service bootstrap contract
+# WebView2 local-service descriptor handoff
 
-## Problem
+## Purpose
 
-The CrayonShell document must know the HTTP service's ephemeral port and per-process bearer token before it can call the service. The browser must not use direct filesystem access. It obtains the descriptor through the host's existing trusted bridge and the narrowly scoped `file.read` API, which applies the host profile-path read policy. The HTTP server must not expose the token through an unauthenticated endpoint.
+CrayonShell needs the ephemeral loopback port and per-process bearer token before it can call the local HTTP metadata API. The token must not be exposed by an unauthenticated HTTP endpoint, included in a URL, persisted in browser storage or written to logs.
 
-CrayonShell already uses the trusted `window.fb2k.invoke/on/off` bridge. The host injects that object into trusted pages, and bridge calls are dispatched by the native `foo_ui_webview2` backend. This existing bridge is the bootstrap channel; it is not the transport for the file operations themselves.
+No new host API is required. The integration uses the existing trusted WebView2 bridge and its existing filesystem policy.
 
-## Proposed host contract
+## Existing host APIs used by CrayonShell
 
-Add one narrowly scoped built-in host method to `foo_ui_webview2`:
+The frontend obtains the native foobar2000 profile directory with:
 
-```js
-const descriptor = await window.fb2k.invoke(
-  "system.getLocalServiceDescriptor",
-  { service: "crayonshell" }
-);
-```
+\`\`\`js
+const profile = await window.fb2k.invoke("misc.getProfilePath", {});
+const profilePath = profile.path || profile.value;
+\`\`\`
 
-Successful response:
+It reads only the fixed descriptor file through the host's existing \`file.read\` method:
 
-```json
+\`\`\`js
+const file = await window.fb2k.invoke("file.read", {
+  path: profilePath + "\\foo_crayonshell_bridge\\service.json"
+});
+const descriptor = JSON.parse(file.content);
+\`\`\`
+
+The actual frontend normalizes native Windows and \`file://\` profile path forms before joining the fixed relative path. The host's \`file.read\` uses the \`Read\` path-security policy, whose whitelist explicitly includes the foobar2000 profile. WebView2 bridge messages are already rejected when the top-level document or message source is not trusted.
+
+## Descriptor location and schema
+
+The Bridge publishes:
+
+\`<foobar2000-profile>\\foo_crayonshell_bridge\\service.json\`
+
+Example:
+
+\`\`\`json
 {
   "success": true,
   "service": "crayonshell",
@@ -30,76 +45,50 @@ Successful response:
   "instanceId": "base64url-encoded-256-bit-instance-id",
   "expiresAt": 1795600000000
 }
-```
+\`\`\`
 
-Failure response when the component is not installed or not running:
+The descriptor is a small UTF-8 JSON document. The publisher rejects invalid ports and tokens and generates a fresh 256-bit instance ID for each component start.
 
-```json
-{
-  "success": false,
-  "code": "SERVICE_UNAVAILABLE"
-}
-```
+## Bridge responsibilities
 
-This is a proposed host API, not an existing `foo_ui_webview2` method.
+- Bind the HTTP listener exclusively to IPv4 loopback with an ephemeral port.
+- Generate a fresh 256-bit CNG bearer token for each service start.
+- Publish atomically to the fixed profile-relative location after the HTTP listener is running.
+- Protect the component directory and descriptor file with a protected DACL granting full control only to the current Windows user and LocalSystem.
+- Include protocol version, process ID, opaque instance ID, port, token and expiry.
+- Keep the expiry at 24 hours and refresh it every six hours without rotating the running token or instance ID.
+- Remove the descriptor before listener shutdown, but only when the stored PID and instance ID still match this instance.
+- Never expose the descriptor over HTTP or log its token.
 
-## Host-side responsibilities
+## Browser responsibilities
 
-- Accept only the fixed service identifier `crayonshell`; do not accept a path, URL, port, or token from the page.
-- Obtain the native profile path through the existing `misc.getProfilePath()` API.
-- Read only `<profile>\\foo_crayonshell_bridge\\service.json` through the existing `file.read({ path })` API; never accept a path from the page.
-- The host's existing message gate permits Bridge calls only from trusted document origins; the file API additionally applies its `Read` path policy, whose whitelist explicitly includes the foobar2000 profile.
-- Reject reparse points, non-regular files, oversized JSON, malformed fields and non-loopback URLs.
-- Verify the descriptor DACL grants access only to the current Windows user and LocalSystem.
-- Require a positive `pid`, and verify service, protocol version, token shape, instance ID and expiry before returning it.
-- Return the descriptor only when the calling document has the exact trusted production origin `https://foo-ui-webview2.local/` or the explicit development origin `http://localhost:5173` while development mode is enabled.
-- Never expose the descriptor to arbitrary popup URLs, untrusted origins, or the built-in test page.
-- Do not cache a token beyond its expiry. Re-read the current descriptor after service restarts.
-- Return only the descriptor from the profile resolved by `misc.getProfilePath`. Do not enumerate other profiles or service instances.
-
-## Component-side responsibilities
-
-- Generate a fresh cryptographically random token for every service start.
-- Bind the listener to `127.0.0.1` and an exclusively reserved ephemeral port.
-- Publish atomically to `<foobar2000-profile>\\foo_crayonshell_bridge\\service.json`.
-- Protect the component directory and descriptor file with a protected DACL granting full control only to the current user and LocalSystem.
-- Include protocol version, process ID, opaque 256-bit instance ID, loopback port, 256-bit token, and expiry.
-- Refresh the expiry every six hours without rotating the instance ID or bearer token; the descriptor lifetime is 24 hours.
-- Remove or invalidate the descriptor before listener shutdown.
-- Rotate the token on restart. Never log the token.
-- Treat a missing, malformed, stale, or mismatched descriptor as unavailable.
-
-The Bridge implementation defines the path and ACL above. CrayonShell discovers the profile using `misc.getProfilePath` and reads this fixed descriptor with `file.read`; no new host API or generic file-reading endpoint is introduced.
-
-## Browser-side responsibilities
-
-CrayonShell's FoobarBridge adapter obtains the descriptor through the existing host bridge and caches it only in memory. The HTTP client then sends:
-
-- `Authorization: Bearer <token>`
-- `Origin: https://foo-ui-webview2.local` in production (or the exact development origin)
-- `Content-Type: application/json` for JSON writes
-
-The adapter must refresh the descriptor once after an authentication failure or connection refusal, then fail with a typed service-unavailable error if the service is still unavailable. It must not retry non-idempotent writes blindly.
+- Resolve the profile directory through \`misc.getProfilePath\`; do not accept a descriptor path from user input.
+- Read only \`foo_crayonshell_bridge\\service.json\` through \`file.read\`.
+- Retry briefly when the descriptor is not present yet during Bridge startup.
+- Validate the JSON, service name, protocol version, positive PID, 256-bit token and instance ID, future expiry and exact \`http://127.0.0.1:<port>\` URL.
+- Cache the descriptor only in memory.
+- Send the token only as \`Authorization: Bearer <token>\`.
+- Refresh the descriptor once after an authentication failure or connection refusal. Do not blindly retry non-idempotent writes; the current Properties inspector uses GET only.
 
 ## CORS and Local Network Access
 
 The HTTP service allows only the exact production origin and the explicitly enabled Vite development origin. It does not use wildcard CORS.
 
-The implementation must verify in the installed WebView2 runtime:
+The installed WebView2 runtime must be checked for:
 
 - HTTPS trusted origin calling the IPv4 loopback HTTP endpoint.
-- Standard `OPTIONS` preflight for `Authorization` and `Content-Type`.
-- The exact `Origin` value emitted by the embedded WebView2 document.
-- Development mode when the page origin is `http://localhost:5173`.
-- Whether that WebView2 runtime enables Chromium Local Network Access (LNA), and whether its loopback permission is granted or prompts the user.
+- Standard \`OPTIONS\` preflight for \`Authorization\` and \`Content-Type\`.
+- The exact \`Origin\` emitted by the embedded WebView2 document.
+- Development mode at \`http://localhost:5173\`.
+- Whether Chromium Local Network Access (LNA) is enabled and requires loopback permission.
 
-Do not add the deprecated Private Network Access `Access-Control-Allow-Private-Network` header as a substitute for LNA permission. Current Chromium guidance uses browser-side local/loopback network permissions alongside standard CORS. The page uses native WebView2 `fetch`; the host's generic HTTP API is not used because it blocks localhost/private destinations. Do not weaken the host's global SSRF protections.
+Do not add the deprecated Private Network Access \`Access-Control-Allow-Private-Network\` header as a replacement for LNA permission. Current Chromium guidance uses browser-side local/loopback network permissions together with standard CORS. Do not weaken the host's global SSRF protections.
 
 ## Acceptance criteria
 
-1. A trusted CrayonShell page can obtain the descriptor while the component is running.
-2. An untrusted page and a popup on another origin cannot obtain it.
-3. The descriptor is not available from an HTTP endpoint without authentication.
-4. A component restart rotates both instance ID and token; the frontend recovers without a foobar2000 restart.
-5. When the component is absent or stopped, the host returns a stable `SERVICE_UNAVAILABLE` response.
-6. The production and Vite development origins are tested in the actual WebView2 runtime.
+1. A trusted CrayonShell page obtains the descriptor through the existing host APIs while the Bridge is running.
+2. An untrusted document cannot call the host bridge because the existing WebView2 origin gate rejects it.
+3. The fixed descriptor file is readable through the host's profile-scoped \`Read\` policy and is not exposed through HTTP.
+4. A component restart rotates the token and instance ID; the frontend reads the new descriptor.
+5. Orderly component shutdown removes only the descriptor owned by that instance.
+6. Production/dev CORS and the installed WebView2 runtime's LNA behavior are verified in foobar2000.
