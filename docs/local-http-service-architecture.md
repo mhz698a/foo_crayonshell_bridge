@@ -13,6 +13,7 @@ This is a local service, not a general-purpose web server. It will expose a smal
 The filesystem timestamp helper now has a first implementation independent of HTTP:
 
 - Reads CreationTime, LastAccessTime, LastWriteTime, and Windows ChangeTime through `GetFileInformationByHandleEx(FileBasicInfo)`.
+- Resolves playlist coordinates on the foobar2000 main thread into a retained `metadb_handle_ptr` plus a copied physical path. The resolver performs no filesystem I/O; workers receive only the copied path, while SDK refresh can retain the exact selected subsong handle.
 - Writes CreationTime, LastAccessTime, and LastWriteTime through `SetFileTime`.
 - Rejects ChangeTime writes with `ERROR_NOT_SUPPORTED`.
 - Reads values back from the same file handle after a successful write and reports write success separately from readback success.
