@@ -57,7 +57,7 @@ File writes and readback remain outside the foobar2000 UI thread. Only the playl
 
 CrayonShell's production origin is https://foo-ui-webview2.local/; Vite development uses http://localhost:5173. The exact allowed origins are configured in the transport. No wildcard CORS is used.
 
-The component's port and bearer token are not exposed by an unauthenticated HTTP endpoint and are never written to logs. After the listener starts, the Bridge atomically publishes `%LOCALAPPDATA%\\foobar2000\\foo_crayonshell_bridge\\<pid>\\service.json` with a protected DACL for the current user and LocalSystem. It removes the file before listener shutdown and refreshes its 24-hour expiry every six hours. The trusted host method that reads this fixed descriptor and returns it only to approved documents is still required.
+The component's port and bearer token are not exposed by an unauthenticated HTTP endpoint and are never written to logs. After the listener starts, the Bridge atomically publishes `<foobar2000-profile>\\foo_crayonshell_bridge\\service.json` with a protected DACL for the current user and LocalSystem. CrayonShell discovers the profile via the host's existing `misc.getProfilePath` method and reads the descriptor through the existing `file.read` method, which allows reads inside the profile. The Bridge removes the file before listener shutdown and refreshes its 24-hour expiry every six hours. No host source changes or new host API are required.
 
 Private Network Access behavior must be verified inside the actual embedded WebView2 runtime before adding any PNA allow response header. The current preflight behavior does not claim PNA compatibility.
 
@@ -72,9 +72,8 @@ Private Network Access behavior must be verified inside the actual embedded WebV
 
 ### Phase E — CrayonShell integration and hardening
 
-- Add the trusted WebView2 host bootstrap for port/token discovery using the fixed descriptor path above.
-- Add the typed React client behind the existing FoobarBridge boundary.
-- Handle server restart, token rotation, missing component, timeout and version mismatch.
+- Use the existing trusted WebView2 APIs `misc.getProfilePath` and `file.read` to obtain the descriptor.
+- Handle server restart, token rotation, missing component, timeout and version mismatch through the typed React client.
 - Verify production/dev CORS and PNA in the embedded WebView2 runtime.
 - Test the installed x86 component inside foobar2000 and validate x64 as well.
 
