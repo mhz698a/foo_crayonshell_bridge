@@ -6,7 +6,7 @@
 
 #include <string>
 
-namespace craybridge::file_time {
+namespace craybridge::playlist {
 namespace {
 
 bool utf8_to_wide(const char* utf8, std::wstring& wide, DWORD& error) {
@@ -31,7 +31,6 @@ bool utf8_to_wide(const char* utf8, std::wstring& wide, DWORD& error) {
         return false;
     }
 
-    // The output buffer includes the null terminator required by Win32.
     wide.resize(static_cast<std::size_t>(required - 1));
     error = ERROR_SUCCESS;
     return true;
@@ -39,9 +38,9 @@ bool utf8_to_wide(const char* utf8, std::wstring& wide, DWORD& error) {
 
 } // namespace
 
-QueryResult query_playlist_item_creation_time(std::size_t playlist_index,
-                                              std::size_t item_index) {
-    QueryResult result{};
+ItemPathResult resolve_item_path(std::size_t playlist_index,
+                                 std::size_t item_index) {
+    ItemPathResult result{};
 
     if (!core_api::is_main_thread()) {
         result.win32_error = ERROR_INVALID_THREAD_ID;
@@ -57,14 +56,18 @@ QueryResult query_playlist_item_creation_time(std::size_t playlist_index,
         return result;
     }
 
-    std::wstring physicalPath;
-    if (!utf8_to_wide(handle->get_path(), physicalPath, result.win32_error)) {
+    if (!utf8_to_wide(handle->get_path(),
+                      result.physical_path,
+                      result.win32_error)) {
         return result;
     }
 
-    // get_path() resolves the physical file path while the playlist handle
-    // preserves subsong identity for the selected entry (e.g. CUE tracks).
-    return query_creation_time_unix_milliseconds(physicalPath);
+    // This is the physical media path. The selected metadb_handle remains the
+    // authority for the playlist/subsong identity; only the copied path leaves
+    // the main-thread SDK boundary. No disk operation runs here.
+    result.success = true;
+    result.win32_error = ERROR_SUCCESS;
+    return result;
 }
 
-} // namespace craybridge::file_time
+} // namespace craybridge::playlist
