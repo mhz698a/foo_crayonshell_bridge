@@ -51,6 +51,8 @@ public:
 
     [[nodiscard]] bool running() const noexcept;
     [[nodiscard]] std::uint16_t port() const noexcept;
+    [[nodiscard]] std::size_t queued_connections() const noexcept;
+    [[nodiscard]] std::size_t active_connections() const noexcept;
 
 private:
     struct Impl;

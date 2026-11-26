@@ -11,9 +11,13 @@
 #include <Windows.h>
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <iostream>
+#include <mutex>
 #include <string>
+#include <thread>
 
 namespace {
 
@@ -279,6 +283,174 @@ void test_loopback_server_security_and_lifecycle() {
     }
 }
 
+ 
+void test_bounded_queue_returns_service_busy() {
+    std::mutex gate_mutex;
+    std::condition_variable gate_condition;
+    bool handler_entered = false;
+    bool release_handler = false;
+
+    craybridge::http::HttpServerOptions options{};
+    options.worker_count = 1;
+    options.queue_capacity = 1;
+    options.socket_timeout_ms = 2000;
+
+    craybridge::http::HttpServer server(
+        [&gate_mutex, &gate_condition, &handler_entered, &release_handler](
+            const craybridge::http::Request&) {
+            std::unique_lock<std::mutex> lock(gate_mutex);
+            handler_entered = true;
+            gate_condition.notify_all();
+            gate_condition.wait_for(
+                lock,
+                std::chrono::seconds(4),
+                [&release_handler] { return release_handler; });
+            return craybridge::http::HttpResponse{200, "{\\"success\\":true}"};
+        },
+        options);
+
+    const auto started = server.start();
+    expect(started.success, "bounded queue test server must start");
+    if (!started.success) return;
+
+    std::string first_response;
+    std::thread first_client([&] {
+        first_response = send_request(
+            started.port,
+            make_request(started.port, started.bearer_token));
+    });
+
+    bool entered = false;
+    {
+        std::unique_lock<std::mutex> lock(gate_mutex);
+        entered = gate_condition.wait_for(
+            lock,
+            std::chrono::seconds(2),
+            [&handler_entered] { return handler_entered; });
+    }
+    expect(entered, "first request must occupy the only worker");
+
+    std::string second_response;
+    std::thread second_client([&] {
+        second_response = send_request(
+            started.port,
+            make_request(started.port, started.bearer_token));
+    });
+
+    const auto queue_deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (server.queued_connections() != 1 &&
+           std::chrono::steady_clock::now() < queue_deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    expect(server.queued_connections() == 1,
+           "second request must occupy the single pending queue slot");
+
+    const auto overloaded = send_request(
+        started.port,
+        make_request(started.port, started.bearer_token));
+    expect(overloaded.find("HTTP/1.1 503 Service Unavailable") == 0,
+           "request beyond worker and queue capacity must receive HTTP 503");
+
+    {
+        std::lock_guard<std::mutex> lock(gate_mutex);
+        release_handler = true;
+    }
+    gate_condition.notify_all();
+
+    first_client.join();
+    second_client.join();
+
+    expect(first_response.find("HTTP/1.1 200 OK") == 0,
+           "active request must complete after the handler is released");
+    expect(second_response.find("HTTP/1.1 200 OK") == 0,
+           "queued request must run after a worker becomes available");
+    expect(server.queued_connections() == 0,
+           "pending queue must drain after both requests complete");
+
+    server.stop();
+}
+
+void test_slow_client_has_an_absolute_request_deadline() {
+    craybridge::http::HttpServerOptions options{};
+    options.worker_count = 1;
+    options.queue_capacity = 1;
+    options.socket_timeout_ms = 300;
+
+    craybridge::http::HttpServer server(
+        [](const craybridge::http::Request&) {
+            return craybridge::http::HttpResponse{200, "{}"};
+        },
+        options);
+
+    const auto started = server.start();
+    expect(started.success, "slow-client test server must start");
+    if (!started.success) return;
+
+    WinsockScope winsock;
+    expect(winsock.valid(), "Winsock client initialization must succeed");
+    if (!winsock.valid()) {
+        server.stop();
+        return;
+    }
+
+    SOCKET client = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    expect(client != INVALID_SOCKET, "slow-client socket must be created");
+    if (client == INVALID_SOCKET) {
+        server.stop();
+        return;
+    }
+
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    address.sin_port = htons(started.port);
+
+    const int connected = ::connect(
+        client,
+        reinterpret_cast<const sockaddr*>(&address),
+        sizeof(address));
+    expect(connected != SOCKET_ERROR, "slow client must connect to loopback");
+
+    const std::string first_part =
+        "GET /api/v1/system/health HTTP/1.1\r\n";
+    const std::string second_part =
+        "Host: 127.0.0.1:" + std::to_string(started.port) + "\r\n";
+
+    expect(send_all(client, first_part),
+           "slow client must send its first request fragment");
+
+    const auto active_deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (server.active_connections() == 0 &&
+           std::chrono::steady_clock::now() < active_deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    expect(server.active_connections() == 1,
+           "slow request must be owned by the worker");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    ::send(client, second_part.data(),
+           static_cast<int>(second_part.size()), 0);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    std::string response;
+    char buffer[1024]{};
+    for (;;) {
+        const int received = ::recv(client, buffer, sizeof(buffer), 0);
+        if (received <= 0) break;
+        response.append(buffer, static_cast<std::size_t>(received));
+    }
+
+    expect(response.find("HTTP/1.1 408 Request Timeout") == 0,
+           "slow client must be rejected at the total request deadline");
+
+    ::shutdown(client, SD_BOTH);
+    ::closesocket(client);
+    server.stop();
+}
+
 void test_vite_origin_requires_explicit_enablement() {
     craybridge::http::HttpServer default_server(
         [](const craybridge::http::Request&) {
@@ -326,6 +498,8 @@ void test_vite_origin_requires_explicit_enablement() {
 int run_http_server_tests() {
     test_invalid_server_configuration();
     test_loopback_server_security_and_lifecycle();
+    test_bounded_queue_returns_service_busy();
+    test_slow_client_has_an_absolute_request_deadline();
     test_vite_origin_requires_explicit_enablement();
 
     if (g_failures != 0) {

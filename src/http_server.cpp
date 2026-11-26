@@ -277,7 +277,7 @@ struct HttpServer::Impl {
     std::thread listener_thread;
     std::vector<std::thread> workers;
 
-    std::mutex queue_mutex;
+    mutable std::mutex queue_mutex;
     std::condition_variable queue_condition;
     std::deque<SOCKET> pending_sockets;
     std::vector<SOCKET> active_sockets;
