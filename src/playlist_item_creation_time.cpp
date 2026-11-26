@@ -65,6 +65,7 @@ ItemPathResult resolve_item_path(std::size_t playlist_index,
     // This is the physical media path. The selected metadb_handle remains the
     // authority for the playlist/subsong identity; only the copied path leaves
     // the main-thread SDK boundary. No disk operation runs here.
+    result.handle = handle;
     result.success = true;
     result.win32_error = ERROR_SUCCESS;
     return result;
