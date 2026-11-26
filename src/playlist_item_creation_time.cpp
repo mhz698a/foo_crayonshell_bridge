@@ -86,7 +86,7 @@ ItemPathResult resolve_item_path(std::size_t playlist_index,
         // SDK first (e.g. file:// -> C:\\...); streams and virtual locations
         // without a native path must never be passed to CreateFileW.
         pfc::string8 native_path;
-        if (!filesystem::g_get_native_path(handle->get_path(), native_path)) {
+        if (!foobar2000_io::filesystem::g_get_native_path(handle->get_path(), native_path)) {
             result.win32_error = ERROR_NOT_SUPPORTED;
             return result;
         }
