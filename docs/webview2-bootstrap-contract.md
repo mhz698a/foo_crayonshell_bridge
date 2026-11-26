@@ -25,6 +25,7 @@ Successful response:
   "service": "crayonshell",
   "protocolVersion": 1,
   "pid": 12345,
+  "pid": 12345,
   "baseUrl": "http://127.0.0.1:49152",
   "token": "base64url-encoded-random-token",
   "instanceId": "base64url-encoded-256-bit-instance-id",
@@ -46,20 +47,22 @@ This is a proposed host API, not an existing `foo_ui_webview2` method.
 ## Host-side responsibilities
 
 - Accept only the fixed service identifier `crayonshell`; do not accept a path, URL, port, or token from the page.
-- Read only `%LOCALAPPDATA%\\foobar2000\\foo_crayonshell_bridge\\<current-process-id>\\service.json`; never accept a path from the page.
+- Obtain the native profile path through the existing `misc.getProfilePath()` API.
+- Read only `<profile>\\foo_crayonshell_bridge\\service.json` through the existing `file.read({ path })` API; never accept a path from the page.
+- The host's existing message gate permits Bridge calls only from trusted document origins; the file API additionally applies its `Read` path policy, whose whitelist explicitly includes the foobar2000 profile.
 - Reject reparse points, non-regular files, oversized JSON, malformed fields and non-loopback URLs.
 - Verify the descriptor DACL grants access only to the current Windows user and LocalSystem.
-- Require `pid` to equal `GetCurrentProcessId()`, and verify service, protocol version, token shape, instance ID and expiry before returning it.
+- Require a positive `pid`, and verify service, protocol version, token shape, instance ID and expiry before returning it.
 - Return the descriptor only when the calling document has the exact trusted production origin `https://foo-ui-webview2.local/` or the explicit development origin `http://localhost:5173` while development mode is enabled.
 - Never expose the descriptor to arbitrary popup URLs, untrusted origins, or the built-in test page.
 - Do not cache a token beyond its expiry. Re-read the current descriptor after service restarts.
-- Return only the descriptor for the current foobar2000 process. Do not enumerate other processes or service instances.
+- Return only the descriptor from the current foobar2000 profile. Do not enumerate other processes or service instances.
 
 ## Component-side responsibilities
 
 - Generate a fresh cryptographically random token for every service start.
 - Bind the listener to `127.0.0.1` and an exclusively reserved ephemeral port.
-- Publish atomically to `%LOCALAPPDATA%\\foobar2000\\foo_crayonshell_bridge\\<pid>\\service.json`.
+- Publish atomically to `<foobar2000-profile>\\foo_crayonshell_bridge\\service.json`.
 - Protect the component and process directories and descriptor file with a protected DACL granting full control only to the current user and LocalSystem.
 - Include protocol version, process ID, opaque 256-bit instance ID, loopback port, 256-bit token, and expiry.
 - Refresh the expiry every six hours without rotating the instance ID or bearer token; the descriptor lifetime is 24 hours.
@@ -67,7 +70,7 @@ This is a proposed host API, not an existing `foo_ui_webview2` method.
 - Rotate the token on restart. Never log the token.
 - Treat a missing, malformed, stale, or mismatched descriptor as unavailable.
 
-The Bridge implementation defines the path and ACL above. The host consumes only this fixed file for the current process; it does not expose a generic file-reading API.
+The Bridge implementation defines the path and ACL above. CrayonShell discovers the profile using `misc.getProfilePath` and reads this fixed descriptor with `file.read`; no new host API or generic file-reading endpoint is introduced.
 
 ## Browser-side responsibilities
 
