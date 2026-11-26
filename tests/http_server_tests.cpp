@@ -241,6 +241,7 @@ void test_loopback_server_security_and_lifecycle() {
         "Origin: https://foo-ui-webview2.local\r\n"
         "Access-Control-Request-Method: PATCH\r\n"
         "Access-Control-Request-Headers: authorization, content-type\r\n"
+        "Access-Control-Request-Private-Network: true\r\n"
         "\r\n";
 
     const auto preflight_response = send_request(started.port, preflight);
@@ -255,8 +256,8 @@ void test_loopback_server_security_and_lifecycle() {
                std::string::npos,
            "preflight must advertise only the required request headers");
     expect(preflight_response.find(
-               "Access-Control-Allow-Private-Network") == std::string::npos,
-           "Private Network Access must remain disabled until WebView2 runtime verification");
+               "Access-Control-Allow-Private-Network: true") != std::string::npos,
+           "trusted preflight requesting loopback access must receive the legacy PNA allow header");
 
     const std::string invalid_preflight =
         "OPTIONS /api/v1/system/health HTTP/1.1\r\n"
@@ -265,6 +266,19 @@ void test_loopback_server_security_and_lifecycle() {
         "Access-Control-Request-Method: GET\r\n"
         "Access-Control-Request-Headers: x-unapproved-header\r\n"
         "\r\n";
+
+    const std::string invalid_private_network_preflight =
+        "OPTIONS /api/v1/system/health HTTP/1.1\r\n"
+        "Host: 127.0.0.1:" + std::to_string(started.port) + "\r\n"
+        "Origin: https://foo-ui-webview2.local\r\n"
+        "Access-Control-Request-Method: GET\r\n"
+        "Access-Control-Request-Private-Network: false\r\n"
+        "\r\n";
+
+    const auto rejected_private_network_preflight =
+        send_request(started.port, invalid_private_network_preflight);
+    expect(rejected_private_network_preflight.find("HTTP/1.1 403 Forbidden") == 0,
+           "malformed Private Network Access request must be rejected");
 
     const auto rejected_preflight =
         send_request(started.port, invalid_preflight);
