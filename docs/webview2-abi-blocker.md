@@ -29,15 +29,20 @@ This avoids passing STL containers, std::function, or nlohmann::json objects acr
 
 The final signature must be agreed with the foo_ui_webview2 maintainer and exported by that component. This repository does not emulate or reach into PluginRegistry internals.
 
-## Component-side contract once the ABI exists
+## Component-side selection service
 
-The browser API will accept a playlist index and item index, not an arbitrary path. The component will:
+The component now has an internal function that accepts a playlist index and item index, requires the foobar2000 main thread, and resolves the file path through playlist_manager::playlist_get_item_handle(). It then reads the physical file creation timestamp with GetFileAttributesExW.
 
-1. Validate both indices against the current playlist manager state.
-2. Retrieve the metadb_handle with playlist_manager::playlist_get_item_handle() on the foobar2000 main thread.
-3. Resolve the item's physical path from the handle.
-4. Query WIN32_FILE_ATTRIBUTE_DATA.ftCreationTime with GetFileAttributesExW.
-5. Convert the Windows FILETIME value to Unix milliseconds.
-6. Return a structured JSON response, including a Win32 error on failure.
+The WebView API must not accept a path supplied by JavaScript. It must use the playlist coordinates to resolve the handle inside foobar2000.
 
-Until that ABI is available, this repository only builds and tests the Windows filesystem timestamp helper. The current component binary is a scaffold and does not yet expose a browser API.
+For CUE and other multi-subsong inputs, the returned metadb_handle keeps the selected subsong identity while get_path() provides the physical file path used for filesystem metadata.
+
+## Remaining work after the ABI is available
+
+1. Register crayonshell.getFileCreatedTime from the component lifecycle.
+2. Parse and validate playlistIndex and itemIndex in the JSON handler.
+3. Dispatch playlist access onto the foobar2000 main thread if the WebView API callback is not already there.
+4. Return a structured JSON response with Unix milliseconds or a Win32 error.
+5. Test the real component with foo_ui_webview2 installed in foobar2000.
+
+Until that ABI is available, the component binary is a scaffold and does not expose a browser API.
