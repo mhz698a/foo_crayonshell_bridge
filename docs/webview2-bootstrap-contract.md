@@ -2,7 +2,7 @@
 
 ## Problem
 
-The CrayonShell document must know the HTTP service's ephemeral port and per-process bearer token before it can call the service. The browser must not read a component-private descriptor file directly, and the HTTP server must not expose the token through an unauthenticated endpoint.
+The CrayonShell document must know the HTTP service's ephemeral port and per-process bearer token before it can call the service. The browser must not use direct filesystem access. It obtains the descriptor through the host's existing trusted bridge and the narrowly scoped `file.read` API, which applies the host profile-path read policy. The HTTP server must not expose the token through an unauthenticated endpoint.
 
 CrayonShell already uses the trusted `window.fb2k.invoke/on/off` bridge. The host injects that object into trusted pages, and bridge calls are dispatched by the native `foo_ui_webview2` backend. This existing bridge is the bootstrap channel; it is not the transport for the file operations themselves.
 
@@ -24,7 +24,6 @@ Successful response:
   "success": true,
   "service": "crayonshell",
   "protocolVersion": 1,
-  "pid": 12345,
   "pid": 12345,
   "baseUrl": "http://127.0.0.1:49152",
   "token": "base64url-encoded-random-token",
@@ -56,14 +55,14 @@ This is a proposed host API, not an existing `foo_ui_webview2` method.
 - Return the descriptor only when the calling document has the exact trusted production origin `https://foo-ui-webview2.local/` or the explicit development origin `http://localhost:5173` while development mode is enabled.
 - Never expose the descriptor to arbitrary popup URLs, untrusted origins, or the built-in test page.
 - Do not cache a token beyond its expiry. Re-read the current descriptor after service restarts.
-- Return only the descriptor from the current foobar2000 profile. Do not enumerate other processes or service instances.
+- Return only the descriptor from the profile resolved by `misc.getProfilePath`. Do not enumerate other profiles or service instances.
 
 ## Component-side responsibilities
 
 - Generate a fresh cryptographically random token for every service start.
 - Bind the listener to `127.0.0.1` and an exclusively reserved ephemeral port.
 - Publish atomically to `<foobar2000-profile>\\foo_crayonshell_bridge\\service.json`.
-- Protect the component and process directories and descriptor file with a protected DACL granting full control only to the current user and LocalSystem.
+- Protect the component directory and descriptor file with a protected DACL granting full control only to the current user and LocalSystem.
 - Include protocol version, process ID, opaque 256-bit instance ID, loopback port, 256-bit token, and expiry.
 - Refresh the expiry every six hours without rotating the instance ID or bearer token; the descriptor lifetime is 24 hours.
 - Remove or invalidate the descriptor before listener shutdown.
