@@ -59,7 +59,7 @@ CrayonShell's production origin is https://foo-ui-webview2.local/; Vite developm
 
 The component's port and bearer token are not exposed by an unauthenticated HTTP endpoint and are never written to logs. After the listener starts, the Bridge atomically publishes `<foobar2000-profile>\\foo_crayonshell_bridge\\service.json` with a protected DACL for the current user and LocalSystem. CrayonShell discovers the profile through the existing `misc.getProfilePath` method and reads the descriptor through the existing `file.read` method, which allows reads inside the profile. The Bridge removes the file before listener shutdown and refreshes its 24-hour expiry every six hours. The host's existing WebView2 message gate rejects messages from untrusted origins. No host source changes or new host API are required.
 
-Private Network Access behavior must be verified inside the actual embedded WebView2 runtime before adding any PNA allow response header. The current preflight behavior does not claim PNA compatibility.
+Standard CORS preflight is implemented for the Authorization and Content-Type headers. Verify the installed WebView2 runtime's Local Network Access (LNA) behavior and loopback permission during actual testing. Do not add the deprecated PNA allow header; current Chromium guidance uses browser-side local/loopback network permissions.
 
 ## foobar2000 metadb rules
 
@@ -74,7 +74,7 @@ Private Network Access behavior must be verified inside the actual embedded WebV
 
 - Use the existing trusted WebView2 APIs `misc.getProfilePath` and `file.read` to obtain the descriptor.
 - Handle server restart, token rotation, missing component, timeout and version mismatch through the typed React client.
-- Verify production/dev CORS and PNA in the embedded WebView2 runtime.
+- Verify production/dev CORS and Local Network Access (LNA) behavior in the embedded WebView2 runtime.
 - Test the installed x86 component inside foobar2000 and validate x64 as well.
 
 ## Explicit non-goals
