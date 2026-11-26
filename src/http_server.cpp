@@ -146,10 +146,23 @@ bool generate_bearer_token(std::string& token,
     return true;
 }
 
-bool send_all(SOCKET socket, std::string_view bytes) noexcept {
+bool send_all(SOCKET socket,
+              std::string_view bytes,
+              DWORD timeout_ms = 3000) noexcept {
+    const ULONGLONG deadline = ::GetTickCount64() + timeout_ms;
     std::size_t sent = 0;
 
     while (sent < bytes.size()) {
+        const ULONGLONG now = ::GetTickCount64();
+        if (now >= deadline) return false;
+
+        const DWORD remaining_timeout =
+            static_cast<DWORD>(deadline - now);
+        ::setsockopt(
+            socket, SOL_SOCKET, SO_SNDTIMEO,
+            reinterpret_cast<const char*>(&remaining_timeout),
+            sizeof(remaining_timeout));
+
         const auto remaining = bytes.size() - sent;
         const int chunk = static_cast<int>(
             (std::min)(remaining,
@@ -267,7 +280,7 @@ struct HttpServer::Impl {
     std::mutex queue_mutex;
     std::condition_variable queue_condition;
     std::deque<SOCKET> pending_sockets;
-    std::unordered_set<SOCKET> active_sockets;
+    std::vector<SOCKET> active_sockets;
 
     HttpServerStartResult start() {
         std::lock_guard<std::mutex> lifecycle_lock(lifecycle_mutex);
@@ -374,10 +387,18 @@ struct HttpServer::Impl {
         bound_port.store(selected_port);
         expected_host = "127.0.0.1:" + std::to_string(selected_port);
 
-        allowed_origins.clear();
-        allowed_origins.emplace_back(kProductionOrigin);
-        if (options.allow_vite_dev_origin) {
-            allowed_origins.emplace_back(kDevelopmentOrigin);
+        try {
+            expected_host = "127.0.0.1:" + std::to_string(selected_port);
+            allowed_origins.clear();
+            allowed_origins.emplace_back(kProductionOrigin);
+            if (options.allow_vite_dev_origin) {
+                allowed_origins.emplace_back(kDevelopmentOrigin);
+            }
+        } catch (...) {
+            result.error_code = ERROR_NOT_ENOUGH_MEMORY;
+            result.error_message = "Unable to initialize the local service security policy.";
+            cleanup_failed_start();
+            return result;
         }
 
         stopping.store(false);
@@ -385,6 +406,7 @@ struct HttpServer::Impl {
 
         try {
             workers.reserve(options.worker_count);
+            active_sockets.reserve(options.worker_count);
             for (std::size_t i = 0; i < options.worker_count; ++i) {
                 workers.emplace_back([this] { worker_loop(); });
             }
@@ -614,7 +636,7 @@ struct HttpServer::Impl {
         static constexpr std::string_view response =
             "HTTP/1.1 503 Service Unavailable\r\n"
             "Content-Type: application/json; charset=utf-8\r\n"
-            "Content-Length: 84\r\n"
+            "Content-Length: 88\r\n"
             "Connection: close\r\n"
             "Cache-Control: no-store\r\n"
             "\r\n"
@@ -639,7 +661,7 @@ struct HttpServer::Impl {
 
                 accepted = pending_sockets.front();
                 pending_sockets.pop_front();
-                active_sockets.insert(accepted);
+                active_sockets.push_back(accepted);
             }
 
             process_socket(accepted);
@@ -649,7 +671,11 @@ struct HttpServer::Impl {
 
             {
                 std::lock_guard<std::mutex> queue_lock(queue_mutex);
-                active_sockets.erase(accepted);
+                const auto active = std::find(
+                    active_sockets.begin(), active_sockets.end(), accepted);
+                if (active != active_sockets.end()) {
+                    active_sockets.erase(active);
+                }
             }
         }
     }
@@ -657,8 +683,24 @@ struct HttpServer::Impl {
     void process_socket(SOCKET socket) noexcept {
         RequestParser parser;
         std::array<char, kReceiveBufferBytes> buffer{};
+        const ULONGLONG deadline =
+            ::GetTickCount64() + options.socket_timeout_ms;
 
         for (;;) {
+            const ULONGLONG now = ::GetTickCount64();
+            if (now >= deadline) {
+                send_error(socket, 408, "REQUEST_TIMEOUT",
+                           "The HTTP request timed out.");
+                return;
+            }
+
+            const DWORD remaining_timeout =
+                static_cast<DWORD>(deadline - now);
+            ::setsockopt(
+                socket, SOL_SOCKET, SO_RCVTIMEO,
+                reinterpret_cast<const char*>(&remaining_timeout),
+                sizeof(remaining_timeout));
+
             const int received = ::recv(
                 socket,
                 buffer.data(),
