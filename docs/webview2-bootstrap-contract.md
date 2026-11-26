@@ -81,19 +81,19 @@ CrayonShell's FoobarBridge adapter obtains the descriptor through the existing h
 
 The adapter must refresh the descriptor once after an authentication failure or connection refusal, then fail with a typed service-unavailable error if the service is still unavailable. It must not retry non-idempotent writes blindly.
 
-## CORS and Private Network Access
+## CORS and Local Network Access
 
-The server must allow only the exact production and explicitly enabled development origins. It must not use `Access-Control-Allow-Origin: *`.
+The HTTP service allows only the exact production origin and the explicitly enabled Vite development origin. It does not use wildcard CORS.
 
-The implementation must verify actual WebView2 behavior for:
+The implementation must verify in the installed WebView2 runtime:
 
-- HTTPS trusted origin calling an HTTP loopback endpoint.
-- Chromium Private Network Access preflight.
-- `OPTIONS` handling for Authorization and JSON content type.
+- HTTPS trusted origin calling the IPv4 loopback HTTP endpoint.
+- Standard `OPTIONS` preflight for `Authorization` and `Content-Type`.
 - The exact `Origin` value emitted by the embedded WebView2 document.
 - Development mode when the page origin is `http://localhost:5173`.
+- Whether that WebView2 runtime enables Chromium Local Network Access (LNA), and whether its loopback permission is granted or prompts the user.
 
-The host's existing HTTP client API blocks localhost/private destinations by design, so the CrayonShell browser client should use the WebView2 page's native `fetch` only after the loopback/CORS/PNA behavior is verified. Do not weaken the host's global SSRF protections to make this service work.
+Do not add the deprecated Private Network Access `Access-Control-Allow-Private-Network` header as a substitute for LNA permission. Current Chromium guidance uses browser-side local/loopback network permissions alongside standard CORS. The page uses native WebView2 `fetch`; the host's generic HTTP API is not used because it blocks localhost/private destinations. Do not weaken the host's global SSRF protections.
 
 ## Acceptance criteria
 
