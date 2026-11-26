@@ -77,7 +77,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>Ws2_32.lib;Bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Ws2_32.lib;Bcrypt.lib;Advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
@@ -90,10 +90,12 @@
     <ClCompile Include="api_route_parser_tests.cpp" />
     <ClCompile Include="timestamp_update_json_tests.cpp" />
     <ClCompile Include="timestamp_job_manager_tests.cpp" />
+    <ClCompile Include="service_descriptor_tests.cpp" />
     <ClCompile Include="..\src\http_request_parser.cpp" />
     <ClCompile Include="..\src\http_server.cpp" />
     <ClCompile Include="..\src\timestamp_update_json.cpp" />
     <ClCompile Include="..\src\timestamp_job_manager.cpp" />
+    <ClCompile Include="..\src\service_descriptor.cpp" />
     <ClCompile Include="..\vendor\llhttp\src\llhttp.c">
       <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
