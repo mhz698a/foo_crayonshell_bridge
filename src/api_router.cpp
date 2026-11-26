@@ -223,6 +223,11 @@ http::HttpResponse resolve_error_response(const ResolveDispatchResult& resolved)
             400, "INVALID_PLAYLIST_COORDINATES",
             "The playlist or item index is outside the supported range.");
 
+    case ERROR_NOT_SUPPORTED:
+        return error_response(
+            422, "ITEM_HAS_NO_NATIVE_PATH",
+            "The selected playlist item has no native Windows file path. File attributes are unavailable for streams and virtual locations.");
+
     case ERROR_INVALID_THREAD_ID:
         return error_response(
             500, "SDK_THREAD_VIOLATION",
