@@ -23,7 +23,7 @@ The server is implemented in src/http_server.* and uses the strict incremental p
 
 - IPv4 loopback only (127.0.0.1), ephemeral port and SO_EXCLUSIVEADDRUSE.
 - Random 256-bit per-instance bearer token generated through Windows CNG.
-- Exact production origin allowlist and opt-in Vite development origin.
+- Exact allowlist for the production WebView2 origin and the local Vite development origin.
 - Host, peer address, Origin and bearer token validation.
 - Four bounded HTTP workers and a queue capped at sixteen accepted sockets by default.
 - Request size, response size, socket timeout and total receive deadline limits.
@@ -59,7 +59,7 @@ CrayonShell's production origin is https://foo-ui-webview2.local/; Vite developm
 
 The component's port and bearer token are not exposed by an unauthenticated HTTP endpoint and are never written to logs. After the listener starts, the Bridge atomically publishes `<foobar2000-profile>\\foo_crayonshell_bridge\\service.json` with a protected DACL for the current user and LocalSystem. CrayonShell discovers the profile through the existing `misc.getProfilePath` method and reads the descriptor through the existing `file.read` method, which allows reads inside the profile. The Bridge removes the file before listener shutdown and refreshes its 24-hour expiry every six hours. The host's existing WebView2 message gate rejects messages from untrusted origins. No host source changes or new host API are required.
 
-Standard CORS preflight is implemented for the Authorization and Content-Type headers. Verify the installed WebView2 runtime's Local Network Access (LNA) behavior and loopback permission during actual testing. Do not add the deprecated PNA allow header; current Chromium guidance uses browser-side local/loopback network permissions.
+Standard CORS preflight is implemented for Authorization and Content-Type. For legacy Chromium builds, the server accepts `Access-Control-Request-Private-Network: true` only from the exact allow-listed origins and returns `Access-Control-Allow-Private-Network: true` only when requested. The frontend explicitly sets `targetAddressSpace: "loopback"`. Verify the installed WebView2 runtime's Local Network Access (LNA) permission behavior during actual testing; the legacy PNA header does not grant modern LNA permission.
 
 ## foobar2000 metadb rules
 
@@ -74,7 +74,7 @@ Standard CORS preflight is implemented for the Authorization and Content-Type he
 
 - Use the existing trusted WebView2 APIs `misc.getProfilePath` and `file.read` to obtain the descriptor.
 - Handle server restart, token rotation, missing component, timeout and version mismatch through the typed React client.
-- Verify production/dev CORS and Local Network Access (LNA) behavior in the embedded WebView2 runtime.
+- Verify production/dev CORS, the legacy PNA preflight exchange and modern Local Network Access (LNA) permission behavior in the embedded WebView2 runtime.
 - Test the installed x86 component inside foobar2000 and validate x64 as well.
 
 ## Explicit non-goals
