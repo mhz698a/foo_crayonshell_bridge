@@ -63,6 +63,6 @@ After the loopback HTTP listener starts, the component writes its descriptor ato
 
 `<foobar2000-profile>\\foo_crayonshell_bridge\\service.json`
 
-The component directory, PID directory and descriptor use a protected DACL that grants full control only to the current Windows user and LocalSystem. The descriptor contains the current process ID, loopback port, bearer token, 256-bit instance ID and expiry. It is removed before orderly listener shutdown; its 24-hour expiry is refreshed every six hours without rotating the running credentials.
+The component directory and descriptor use a protected DACL that grants full control only to the current Windows user and LocalSystem. The descriptor contains the current process ID, loopback port, bearer token, 256-bit instance ID and expiry. It is removed before orderly listener shutdown; its 24-hour expiry is refreshed every six hours without rotating the running credentials.
 
-The descriptor is not served by HTTP. The trusted `foo_ui_webview2` host still needs to implement `system.getLocalServiceDescriptor({ service: "crayonshell" })`, read only the current process's fixed descriptor path, verify the caller origin and return the descriptor to the approved page. Until that host method is available, CrayonShell cannot obtain the token and the timestamp inspector cannot complete its HTTP request.
+The descriptor is not served by HTTP. CrayonShell obtains the profile path through the existing `misc.getProfilePath` host API and reads this fixed file through the existing `file.read` API, whose Read policy includes the foobar2000 profile. The host's existing WebView2 message gate accepts only trusted document origins. No host API additions or changes to the host repository are required.
