@@ -125,8 +125,8 @@ jobs:
       - name: Publish GitHub Release for version tags
         if: startsWith(github.ref, 'refs/tags/v')
         env:
-          GH_TOKEN: \${{ github.token }}
-          TAG_NAME: \${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
