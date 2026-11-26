@@ -31,7 +31,14 @@ jobs:
           ref: 9e4823ee802dfb704de1ce42401b48b407a54180
           path: _sdk-staging
 
-      - name: Stage SDK dependencies
+      - name: Checkout pinned llhttp release
+        uses: actions/checkout@v6
+        with:
+          repository: nodejs/llhttp
+          ref: release/v9.4.4
+          path: _llhttp-staging
+
+      - name: Stage SDK and HTTP parser dependencies
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -47,6 +54,43 @@ jobs:
             Copy-Item -LiteralPath $from -Destination $fb2k -Recurse -Force
           }
 
+          # llhttp release/v9.4.4, commit prefix 8164852. The release branch
+          # contains the generated C sources; no Node.js code generation is
+          # required in the foobar2000 component build.
+          $llhttpRoot = Join-Path $root '_llhttp-staging'
+          $llhttpCommit = (git -C $llhttpRoot rev-parse --short=7 HEAD).Trim()
+          if ($llhttpCommit -ne '8164852') {
+            throw "Unexpected llhttp revision: $llhttpCommit"
+          }
+
+          $llhttpSourceFiles = @{
+            'include\llhttp.h' = 'vendor\llhttp\include\llhttp.h'
+            'src\llhttp.c' = 'vendor\llhttp\src\llhttp.c'
+            'src\api.c' = 'vendor\llhttp\src\api.c'
+            'src\http.c' = 'vendor\llhttp\src\http.c'
+            'LICENSE' = 'vendor\llhttp\LICENSE'
+          }
+          foreach ($entry in $llhttpSourceFiles.GetEnumerator()) {
+            $from = Join-Path $llhttpRoot $entry.Key
+            $to = Join-Path $root $entry.Value
+            if (-not (Test-Path $from)) {
+              throw "Pinned llhttp source missing: $($entry.Key)"
+            }
+            New-Item -ItemType Directory -Force -Path (Split-Path $to) | Out-Null
+            Copy-Item -LiteralPath $from -Destination $to -Force
+          }
+
+          $headerText = Get-Content -Raw (Join-Path $root 'vendor\llhttp\include\llhttp.h')
+          foreach ($versionMacro in @(
+            '#define LLHTTP_VERSION_MAJOR 9',
+            '#define LLHTTP_VERSION_MINOR 4',
+            '#define LLHTTP_VERSION_PATCH 4'
+          )) {
+            if (-not $headerText.Contains($versionMacro)) {
+              throw "Unexpected llhttp header version; expected 9.4.4."
+            }
+          }
+
           $pfcSource = Join-Path $root '_sdk-staging\pfc'
           if (-not (Test-Path $pfcSource)) { throw "Missing PFC SDK directory: $pfcSource" }
           Copy-Item -LiteralPath $pfcSource -Destination $vendor -Recurse -Force
@@ -56,7 +100,12 @@ jobs:
             'vendor\foobar2000\foobar2000_component_client\foobar2000_component_client.vcxproj',
             'vendor\foobar2000\shared\shared-Win32.lib',
             'vendor\foobar2000\shared\shared-x64.lib',
-            'vendor\pfc\pfc.vcxproj'
+            'vendor\pfc\pfc.vcxproj',
+            'vendor\llhttp\include\llhttp.h',
+            'vendor\llhttp\src\llhttp.c',
+            'vendor\llhttp\src\api.c',
+            'vendor\llhttp\src\http.c',
+            'vendor\llhttp\LICENSE'
           )) {
             if (-not (Test-Path (Join-Path $root $required))) {
               throw "SDK staging incomplete: $required"
