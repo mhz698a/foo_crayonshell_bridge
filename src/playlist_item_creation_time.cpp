@@ -1,7 +1,6 @@
-#include "playlist_item_creation_time.h"
+#include <SDK/foobar2000.h>
 
-#include <SDK/core_api.h>
-#include <SDK/playlist.h>
+#include "playlist_item_creation_time.h"
 
 #include <Windows.h>
 
