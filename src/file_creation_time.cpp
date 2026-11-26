@@ -14,6 +14,14 @@ signed_filetime_to_unix_milliseconds(const LARGE_INTEGER& value) noexcept {
         static_cast<std::uint64_t>(value.QuadPart));
 }
 
+std::optional<std::uint64_t>
+filetime_to_unix_milliseconds(const FILETIME& value) noexcept {
+    ULARGE_INTEGER ticks{};
+    ticks.LowPart = value.dwLowDateTime;
+    ticks.HighPart = value.dwHighDateTime;
+    return filetime_ticks_to_unix_milliseconds(ticks.QuadPart);
+}
+
 bool to_filetime(std::uint64_t unixMilliseconds, FILETIME& output) noexcept {
     const auto ticks = unix_milliseconds_to_filetime_ticks(unixMilliseconds);
     if (!ticks.has_value()) {
@@ -33,7 +41,33 @@ TimestampQueryResult read_timestamps(HANDLE file) noexcept {
     FILE_BASIC_INFO basicInfo{};
     if (!::GetFileInformationByHandleEx(
             file, FileBasicInfo, &basicInfo, sizeof(basicInfo))) {
-        result.win32_error = ::GetLastError();
+        // Some Windows file-system providers do not implement FileBasicInfo.
+        // Fall back to the broadly supported BY_HANDLE_FILE_INFORMATION API.
+        BY_HANDLE_FILE_INFORMATION legacyInfo{};
+        if (!::GetFileInformationByHandle(file, &legacyInfo)) {
+            result.win32_error = ::GetLastError();
+            return result;
+        }
+
+        if ((legacyInfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+            result.win32_error = ERROR_DIRECTORY;
+            return result;
+        }
+
+        result.timestamps.size_bytes =
+            (static_cast<std::uint64_t>(legacyInfo.nFileSizeHigh) << 32) |
+            static_cast<std::uint64_t>(legacyInfo.nFileSizeLow);
+        result.timestamps.creation_time =
+            filetime_to_unix_milliseconds(legacyInfo.ftCreationTime);
+        result.timestamps.last_access_time =
+            filetime_to_unix_milliseconds(legacyInfo.ftLastAccessTime);
+        result.timestamps.last_write_time =
+            filetime_to_unix_milliseconds(legacyInfo.ftLastWriteTime);
+        // The legacy structure has no ChangeTime member. Keep ctime unavailable
+        // rather than substituting creation time or last-write time.
+
+        result.success = true;
+        result.win32_error = ERROR_SUCCESS;
         return result;
     }
 
@@ -48,6 +82,13 @@ TimestampQueryResult read_timestamps(HANDLE file) noexcept {
         standardInfo.EndOfFile.QuadPart >= 0) {
         result.timestamps.size_bytes =
             static_cast<std::uint64_t>(standardInfo.EndOfFile.QuadPart);
+    } else {
+        // FileStandardInfo can be unavailable independently of FileBasicInfo.
+        LARGE_INTEGER fileSize{};
+        if (::GetFileSizeEx(file, &fileSize) && fileSize.QuadPart >= 0) {
+            result.timestamps.size_bytes =
+                static_cast<std::uint64_t>(fileSize.QuadPart);
+        }
     }
 
     result.timestamps.creation_time =
