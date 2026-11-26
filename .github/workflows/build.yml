@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   build:
-    name: Build and package (Windows x64)
+    name: Build and package (Windows x86 + x64)
     runs-on: windows-2022
 
     steps:
@@ -54,6 +54,8 @@ jobs:
           foreach ($required in @(
             'vendor\foobar2000\SDK\foobar2000_SDK.vcxproj',
             'vendor\foobar2000\foobar2000_component_client\foobar2000_component_client.vcxproj',
+            'vendor\foobar2000\shared\shared-Win32.lib',
+            'vendor\foobar2000\shared\shared-x64.lib',
             'vendor\pfc\pfc.vcxproj'
           )) {
             if (-not (Test-Path (Join-Path $root $required))) {
@@ -64,35 +66,56 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v3
 
-      - name: Build component
+      - name: Build Win32 component
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $solutionDir = "$env:GITHUB_WORKSPACE\"
+          $solutionDir = $env:GITHUB_WORKSPACE + [System.IO.Path]::DirectorySeparatorChar
+          msbuild foo_crayonshell_bridge.vcxproj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 "/p:SolutionDir=$solutionDir" /m /nologo /v:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build x64 component
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $solutionDir = $env:GITHUB_WORKSPACE + [System.IO.Path]::DirectorySeparatorChar
           msbuild foo_crayonshell_bridge.vcxproj /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 "/p:SolutionDir=$solutionDir" /m /nologo /v:minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Build tests
+      - name: Build Win32 tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          msbuild tests\foo_crayonshell_bridge_tests.vcxproj /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /m /nologo /v:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build x64 tests
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           msbuild tests\foo_crayonshell_bridge_tests.vcxproj /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /m /nologo /v:minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Run tests
+      - name: Run Win32 tests
+        shell: pwsh
+        run: |
+          & '.\bin\tests\Release_Win32\foo_crayonshell_bridge_tests.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run x64 tests
         shell: pwsh
         run: |
           & '.\bin\tests\Release_x64\foo_crayonshell_bridge_tests.exe'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Package fb2k-component
+      - name: Package multi-architecture fb2k-component
         shell: pwsh
-        run: .\scripts\package-component.ps1 -Configuration Release -Platform x64
+        run: .\scripts\package-component.ps1 -Configuration Release
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: foo_crayonshell_bridge-windows-x64
+          name: foo_crayonshell_bridge-windows-x86-x64
           path: |
             dist/*.fb2k-component
             dist/*.sha256
@@ -102,8 +125,8 @@ jobs:
       - name: Publish GitHub Release for version tags
         if: startsWith(github.ref, 'refs/tags/v')
         env:
-          GH_TOKEN: ${{ github.token }}
-          TAG_NAME: ${{ github.ref_name }}
+          GH_TOKEN: \${{ github.token }}
+          TAG_NAME: \${{ github.ref_name }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
