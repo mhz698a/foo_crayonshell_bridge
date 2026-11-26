@@ -1,6 +1,13 @@
-#include "api_router.h"
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
 #include <SDK/foobar2000.h>
+
+#include "api_router.h"
 
 #include "api_route_parser.h"
 #include "file_creation_time.h"
