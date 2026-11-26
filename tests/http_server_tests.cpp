@@ -1,7 +1,14 @@
 #include "../src/http_server.h"
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <Windows.h>
 
 #include <atomic>
 #include <cstdint>
@@ -146,14 +153,16 @@ void test_invalid_server_configuration() {
 
 void test_loopback_server_security_and_lifecycle() {
     std::atomic<int> handler_calls{0};
+    std::atomic<bool> handler_saw_get{false};
+    std::atomic<bool> handler_saw_expected_target{false};
 
     craybridge::http::HttpServer server(
-        [&handler_calls](const craybridge::http::Request& request) {
+        [&handler_calls, &handler_saw_get, &handler_saw_expected_target](
+            const craybridge::http::Request& request) {
             ++handler_calls;
-            expect(request.method == "GET",
-                   "handler must receive the parsed request method");
-            expect(request.target == "/api/v1/system/health",
-                   "handler must receive the parsed request target");
+            handler_saw_get.store(request.method == "GET");
+            handler_saw_expected_target.store(
+                request.target == "/api/v1/system/health");
 
             return craybridge::http::HttpResponse{
                 200,
@@ -191,6 +200,10 @@ void test_loopback_server_security_and_lifecycle() {
            "bearer token must never be echoed in the HTTP response");
     expect(handler_calls.load() == 1,
            "valid authenticated request must invoke the handler once");
+    expect(handler_saw_get.load(),
+           "handler must receive the parsed request method");
+    expect(handler_saw_expected_target.load(),
+           "handler must receive the parsed request target");
 
     const auto unauthorized = send_request(
         started.port,
