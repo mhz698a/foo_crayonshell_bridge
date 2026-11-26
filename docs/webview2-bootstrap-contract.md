@@ -24,9 +24,10 @@ Successful response:
   "success": true,
   "service": "crayonshell",
   "protocolVersion": 1,
+  "pid": 12345,
   "baseUrl": "http://127.0.0.1:49152",
   "token": "base64url-encoded-random-token",
-  "instanceId": "opaque-process-instance-id",
+  "instanceId": "base64url-encoded-256-bit-instance-id",
   "expiresAt": 1795600000000
 }
 ```
@@ -45,8 +46,10 @@ This is a proposed host API, not an existing `foo_ui_webview2` method.
 ## Host-side responsibilities
 
 - Accept only the fixed service identifier `crayonshell`; do not accept a path, URL, port, or token from the page.
-- Resolve the descriptor through a fixed, host-controlled location or an agreed in-process registration mechanism.
-- Verify descriptor ownership, schema, process instance ID, and expiry before returning it.
+- Read only `%LOCALAPPDATA%\\foobar2000\\foo_crayonshell_bridge\\<current-process-id>\\service.json`; never accept a path from the page.
+- Reject reparse points, non-regular files, oversized JSON, malformed fields and non-loopback URLs.
+- Verify the descriptor DACL grants access only to the current Windows user and LocalSystem.
+- Require `pid` to equal `GetCurrentProcessId()`, and verify service, protocol version, token shape, instance ID and expiry before returning it.
 - Return the descriptor only when the calling document has the exact trusted production origin `https://foo-ui-webview2.local/` or the explicit development origin `http://localhost:5173` while development mode is enabled.
 - Never expose the descriptor to arbitrary popup URLs, untrusted origins, or the built-in test page.
 - Do not cache a token beyond its expiry. Re-read the current descriptor after service restarts.
@@ -56,13 +59,15 @@ This is a proposed host API, not an existing `foo_ui_webview2` method.
 
 - Generate a fresh cryptographically random token for every service start.
 - Bind the listener to `127.0.0.1` and an exclusively reserved ephemeral port.
-- Publish the descriptor atomically to a known per-user LocalAppData location with a restrictive user ACL.
-- Include protocol version, process ID, opaque instance ID, port, token, and expiry.
+- Publish atomically to `%LOCALAPPDATA%\\foobar2000\\foo_crayonshell_bridge\\<pid>\\service.json`.
+- Protect the component and process directories and descriptor file with a protected DACL granting full control only to the current user and LocalSystem.
+- Include protocol version, process ID, opaque 256-bit instance ID, loopback port, 256-bit token, and expiry.
+- Refresh the expiry every six hours without rotating the instance ID or bearer token; the descriptor lifetime is 24 hours.
 - Remove or invalidate the descriptor before listener shutdown.
 - Rotate the token on restart. Never log the token.
 - Treat a missing, malformed, stale, or mismatched descriptor as unavailable.
 
-The exact descriptor path and file ACL implementation must be agreed with the upstream host before code is written. A host-side API must not become a generic file-reading API.
+The Bridge implementation defines the path and ACL above. The host consumes only this fixed file for the current process; it does not expose a generic file-reading API.
 
 ## Browser-side responsibilities
 
