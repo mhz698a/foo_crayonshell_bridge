@@ -67,10 +67,11 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdc11</LanguageStandard_C>
       <CharacterSet>Unicode</CharacterSet>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\src;$(ProjectDir)..\vendor\llhttp\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
@@ -82,6 +83,17 @@
   <ItemGroup>
     <ClCompile Include="file_creation_time_tests.cpp" />
     <ClCompile Include="..\src\file_creation_time.cpp" />
+    <ClCompile Include="http_request_parser_tests.cpp" />
+    <ClCompile Include="..\src\http_request_parser.cpp" />
+    <ClCompile Include="..\vendor\llhttp\src\llhttp.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\vendor\llhttp\src\api.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="..\vendor\llhttp\src\http.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
   </ItemGroup>
 
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
