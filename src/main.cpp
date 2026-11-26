@@ -43,7 +43,7 @@ std::filesystem::path get_profile_root_path() {
         if (file_uri_drive_root) native_path.erase(0, 1);
     }
     for (char& character : native_path) {
-        if (character == '/') character = '\\\\';
+        if (character == '/') character = '\\';
     }
 
     const auto wide_path = pfc::stringcvt::string_wide_from_utf8(native_path.c_str());
