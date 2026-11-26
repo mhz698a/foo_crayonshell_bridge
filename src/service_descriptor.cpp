@@ -23,7 +23,6 @@
 namespace craybridge::bootstrap {
 namespace {
 
-constexpr wchar_t kFoobarDirectory[] = L"foobar2000";
 constexpr wchar_t kComponentDirectory[] = L"foo_crayonshell_bridge";
 constexpr wchar_t kDescriptorFile[] = L"service.json";
 constexpr std::uint64_t kDescriptorLifetimeMs = 24ULL * 60ULL * 60ULL * 1000ULL;
@@ -100,34 +99,6 @@ std::uint64_t current_unix_time_ms() noexcept {
 
     if (ticks.QuadPart < kWindowsToUnixEpochTicks) return 0;
     return (ticks.QuadPart - kWindowsToUnixEpochTicks) / 10000ULL;
-}
-
-bool get_local_app_data(std::filesystem::path& output, unsigned long& error_code) {
-    const DWORD required = ::GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0);
-    if (required == 0 || required > 32767) {
-        error_code = ::GetLastError();
-        if (error_code == ERROR_SUCCESS) error_code = ERROR_ENVVAR_NOT_FOUND;
-        return false;
-    }
-
-    std::vector<wchar_t> buffer(required);
-    const DWORD written = ::GetEnvironmentVariableW(
-        L"LOCALAPPDATA", buffer.data(), static_cast<DWORD>(buffer.size()));
-    if (written == 0 || written >= buffer.size()) {
-        error_code = ::GetLastError();
-        if (error_code == ERROR_SUCCESS) error_code = ERROR_INVALID_DATA;
-        return false;
-    }
-
-    try {
-        output = std::filesystem::path(buffer.data());
-    } catch (...) {
-        error_code = ERROR_NOT_ENOUGH_MEMORY;
-        return false;
-    }
-
-    error_code = ERROR_SUCCESS;
-    return true;
 }
 
 bool build_user_security_descriptor(
@@ -365,8 +336,8 @@ bool build_service_descriptor_json(
 }
 
 ServiceDescriptorPublisher::ServiceDescriptorPublisher(
-    std::filesystem::path local_app_data_override)
-    : local_app_data_override_(std::move(local_app_data_override)) {}
+    std::filesystem::path profile_root)
+    : profile_root_(std::move(profile_root)) {}
 
 bool ServiceDescriptorPublisher::publish(
     std::uint16_t port,
@@ -388,21 +359,22 @@ bool ServiceDescriptorPublisher::publish(
     };
 
     try {
-        std::filesystem::path local_app_data = local_app_data_override_;
-        if (local_app_data.empty() &&
-            !get_local_app_data(local_app_data, error_code)) {
+        if (profile_root_.empty()) {
             free_security_descriptor();
+            error_code = ERROR_INVALID_PARAMETER;
             return false;
         }
 
-        const auto root = local_app_data / kFoobarDirectory;
-        const auto component_directory = root / kComponentDirectory;
-        const auto process_directory =
-            component_directory / std::to_wstring(::GetCurrentProcessId());
+        const DWORD profile_attributes = ::GetFileAttributesW(profile_root_.c_str());
+        if (profile_attributes == INVALID_FILE_ATTRIBUTES ||
+            (profile_attributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
+            free_security_descriptor();
+            error_code = ERROR_PATH_NOT_FOUND;
+            return false;
+        }
 
-        if (!ensure_parent_directory(root, error_code) ||
-            !ensure_protected_directory(component_directory, security_descriptor, error_code) ||
-            !ensure_protected_directory(process_directory, security_descriptor, error_code)) {
+        const auto component_directory = profile_root_ / kComponentDirectory;
+        if (!ensure_protected_directory(component_directory, security_descriptor, error_code)) {
             free_security_descriptor();
             return false;
         }
@@ -433,7 +405,7 @@ bool ServiceDescriptorPublisher::publish(
             return false;
         }
 
-        descriptor_path_ = process_directory / kDescriptorFile;
+        descriptor_path_ = component_directory / kDescriptorFile;
         std::wstring temporary_suffix = L".";
         temporary_suffix += std::wstring(instance_id_.begin(), instance_id_.end());
         temporary_suffix += L".tmp";
