@@ -8,6 +8,18 @@ The service remains inside the foobar2000 process, but its listener, HTTP parsin
 
 This is a local service, not a general-purpose web server. It will expose a small, versioned JSON API and will not serve arbitrary files.
 
+## Current implementation baseline
+
+The filesystem timestamp helper now has a first implementation independent of HTTP:
+
+- Reads CreationTime, LastAccessTime, LastWriteTime, and Windows ChangeTime through `GetFileInformationByHandleEx(FileBasicInfo)`.
+- Writes CreationTime, LastAccessTime, and LastWriteTime through `SetFileTime`.
+- Rejects ChangeTime writes with `ERROR_NOT_SUPPORTED`.
+- Reads values back from the same file handle after a successful write and reports write success separately from readback success.
+- Converts FILETIME to Unix milliseconds and validates the reverse conversion against the signed `LARGE_INTEGER` range used by `FILE_BASIC_INFO`.
+
+This helper is not yet exposed to JavaScript and is not yet called by an HTTP route. Its Windows tests have been expanded, but the updated source has not yet been run through the Windows CI pipeline.
+
 ## Constraints discovered
 
 ### Frontend origin and existing host bridge
