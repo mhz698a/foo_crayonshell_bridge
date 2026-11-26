@@ -71,6 +71,7 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdc11</LanguageStandard_C>
       <CharacterSet>Unicode</CharacterSet>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
@@ -82,6 +83,7 @@
         $(ProjectDir)vendor\foobar2000\shared;
         $(ProjectDir)vendor\foobar2000\foobar2000_component_client;
         $(ProjectDir)vendor\pfc;
+        $(ProjectDir)vendor\llhttp\include;
         %(AdditionalIncludeDirectories)
       </AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_WINDOWS;_USRDLL;UNICODE;_UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -129,6 +131,17 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\file_creation_time.cpp" />
     <ClCompile Include="src\playlist_item_creation_time.cpp" />
+    <ClCompile Include="src\http_request_parser.cpp" />
+    <ClCompile Include="vendor\llhttp\src\llhttp.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="vendor\llhttp\src\api.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClCompile Include="vendor\llhttp\src\http.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
+    <ClInclude Include="src\http_request_parser.h" />
     <ClInclude Include="src\file_creation_time.h" />
     <ClInclude Include="src\playlist_item_creation_time.h" />
     <ClInclude Include="src\version.h" />
