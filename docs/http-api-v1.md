@@ -30,7 +30,7 @@ Failure:
       }
     }
 
-Messages do not disclose filesystem paths, tokens or internal details. Error codes are stable machine-readable identifiers. Filesystem-operation errors also include the numeric `win32Error` returned by the Windows API, allowing the caller to distinguish the underlying OS failure without exposing the file path.
+Messages do not disclose filesystem paths or tokens. Error codes are stable machine-readable identifiers. Filesystem-operation errors additionally include the numeric `win32Error` returned by the Windows API, allowing the caller to distinguish the underlying OS failure without exposing the file path.
 
 ## GET /system/health
 
