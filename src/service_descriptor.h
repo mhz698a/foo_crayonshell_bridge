@@ -17,8 +17,9 @@ bool build_service_descriptor_json(
 
 class ServiceDescriptorPublisher final {
 public:
-    // An optional LocalAppData root override is used by the isolated test suite.
-    explicit ServiceDescriptorPublisher(std::filesystem::path local_app_data_override = {});
+    // Receives the native foobar2000 profile directory resolved by the SDK.
+    // Tests pass an isolated temporary profile directory.
+    explicit ServiceDescriptorPublisher(std::filesystem::path profile_root);
 
     ServiceDescriptorPublisher(const ServiceDescriptorPublisher&) = delete;
     ServiceDescriptorPublisher& operator=(const ServiceDescriptorPublisher&) = delete;
