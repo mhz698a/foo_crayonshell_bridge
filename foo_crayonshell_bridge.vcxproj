@@ -91,7 +91,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>Ws2_32.lib;Bcrypt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Ws2_32.lib;Bcrypt.lib;Advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(ProjectDir)vendor\foobar2000\shared;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
@@ -137,6 +137,7 @@
     <ClCompile Include="src\timestamp_job_manager.cpp" />
     <ClCompile Include="src\http_request_parser.cpp" />
     <ClCompile Include="src\http_server.cpp" />
+    <ClCompile Include="src\service_descriptor.cpp" />
     <ClCompile Include="vendor\llhttp\src\llhttp.c">
       <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
@@ -150,6 +151,7 @@
     <ClInclude Include="src\api_router.h" />
     <ClInclude Include="src\http_request_parser.h" />
     <ClInclude Include="src\http_server.h" />
+    <ClInclude Include="src\service_descriptor.h" />
     <ClInclude Include="src\file_creation_time.h" />
     <ClInclude Include="src\playlist_item_creation_time.h" />
     <ClInclude Include="src\timestamp_update_json.h" />
