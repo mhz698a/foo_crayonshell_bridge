@@ -130,6 +130,7 @@
 
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\api_router.cpp" />
     <ClCompile Include="src\file_creation_time.cpp" />
     <ClCompile Include="src\playlist_item_creation_time.cpp" />
     <ClCompile Include="src\http_request_parser.cpp" />
@@ -143,6 +144,8 @@
     <ClCompile Include="vendor\llhttp\src\http.c">
       <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
+    <ClInclude Include="src\api_route_parser.h" />
+    <ClInclude Include="src\api_router.h" />
     <ClInclude Include="src\http_request_parser.h" />
     <ClInclude Include="src\http_server.h" />
     <ClInclude Include="src\file_creation_time.h" />

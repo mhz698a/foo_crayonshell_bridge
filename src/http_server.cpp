@@ -197,6 +197,7 @@ const char* reason_phrase(unsigned int status) noexcept {
     case 408: return "Request Timeout";
     case 413: return "Content Too Large";
     case 421: return "Misdirected Request";
+    case 422: return "Unprocessable Content";
     case 429: return "Too Many Requests";
     case 500: return "Internal Server Error";
     case 501: return "Not Implemented";

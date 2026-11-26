@@ -1,4 +1,5 @@
 #include "../src/http_server.h"
+#include "../src/api_route_parser.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -493,9 +494,49 @@ void test_vite_origin_requires_explicit_enablement() {
     dev_server.stop();
 }
 
+ 
+void test_playlist_timestamp_route_parser() {
+    using craybridge::api::parse_playlist_timestamp_route;
+    craybridge::api::PlaylistTimestampRoute route{};
+
+    expect(parse_playlist_timestamp_route(
+               "/api/v1/playlists/0/items/0/timestamps", route),
+           "canonical zero-based playlist timestamp route must parse");
+    expect(route.playlist_index == 0 && route.item_index == 0,
+           "zero-based route coordinates must be preserved");
+
+    expect(parse_playlist_timestamp_route(
+               "/api/v1/playlists/42/items/9001/timestamps", route),
+           "canonical positive playlist timestamp route must parse");
+    expect(route.playlist_index == 42 && route.item_index == 9001,
+           "positive route coordinates must be preserved");
+
+    const std::string_view invalid[] = {
+        "",
+        "/api/v1/playlists//items/0/timestamps",
+        "/api/v1/playlists/0/items//timestamps",
+        "/api/v1/playlists/-1/items/0/timestamps",
+        "/api/v1/playlists/+1/items/0/timestamps",
+        "/api/v1/playlists/1.0/items/0/timestamps",
+        "/api/v1/playlists/0/items/0/timestamps/",
+        "/api/v1/playlists/0/items/0/timestamps?extra=1",
+        "/api/v1/playlists/0%2F1/items/0/timestamps",
+        "/api/v1/playlists/0/items/0/other",
+        "/api/v1/playlists/0/items/0/timestamps/extra",
+        "/api/v1/playlists/18446744073709551616/items/0/timestamps",
+        "/api/v1/playlists/0/items/18446744073709551616/timestamps"
+    };
+
+    for (const auto target : invalid) {
+        expect(!parse_playlist_timestamp_route(target, route),
+               "malformed or overflowing playlist timestamp route must fail");
+    }
+}
+
 } // namespace
 
 int run_http_server_tests() {
+    test_playlist_timestamp_route_parser();
     test_invalid_server_configuration();
     test_loopback_server_security_and_lifecycle();
     test_bounded_queue_returns_service_busy();

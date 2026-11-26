@@ -1,16 +1,15 @@
-# HTTP API v1 contract (initial slice)
+# HTTP API v1
 
-This document defines the first browser-facing API surface. It is a contract for implementation, not a claim that the endpoints are already available.
+This contract describes the implemented read-only slice and the planned write/job surface. An endpoint is not considered available until its implementation and tests are present.
 
 ## Transport
 
 - Base URL: `http://127.0.0.1:<ephemeral-port>/api/v1`.
-- HTTP/1.1, JSON UTF-8.
-- One request per TCP connection in the initial implementation; response includes `Connection: close`.
-- All routes require `Authorization: Bearer <instance-token>`.
-- Requests must originate from the exact production WebView2 origin or the explicitly enabled Vite development origin.
-- The listener rejects non-loopback peers and unexpected Host/Origin values.
-- The token is delivered only through the trusted WebView2 host bootstrap. It is never returned by an unauthenticated HTTP route or placed in a URL.
+- HTTP/1.1, JSON UTF-8, one request per TCP connection.
+- `Connection: close`, no keep-alive, no upgrades, no CONNECT.
+- Every route requires `Authorization: Bearer <instance-token>`.
+- Exact production WebView2 origin or explicitly enabled Vite development origin only.
+- No arbitrary filesystem paths, token query parameters or unauthenticated descriptor endpoint.
 
 ## Common response envelope
 
@@ -35,29 +34,29 @@ Failure:
 }
 ```
 
-Error messages are suitable for display and must not disclose filesystem paths, tokens, or internal implementation details. Machine-readable `code` values are stable; messages may evolve.
+Messages do not disclose filesystem paths, tokens or internal details. Error codes are stable machine-readable identifiers.
 
-## Endpoints
+## Implemented read-only endpoints
 
 ### GET /system/health
 
-Returns protocol and component information.
+Returns protocol and component version, service uptime and capability flags.
 
 ```json
 {
   "success": true,
   "data": {
     "protocolVersion": 1,
-    "componentVersion": "0.2.0",
+    "componentVersion": "0.1.0",
     "uptimeMs": 12000,
     "capabilities": {
       "readCreationTime": true,
       "writeCreationTime": false,
-      "readLastAccessTime": false,
+      "readLastAccessTime": true,
       "writeLastAccessTime": false,
-      "readLastWriteTime": false,
+      "readLastWriteTime": true,
       "writeLastWriteTime": false,
-      "readChangeTime": false,
+      "readChangeTime": true,
       "writeChangeTime": false,
       "metadbRefresh": false
     }
@@ -65,13 +64,11 @@ Returns protocol and component information.
 }
 ```
 
-Capability flags are derived from implemented and tested behavior, not merely from Windows API declarations.
+Capability flags describe implemented routes. Filesystem-specific read failures are reported per item/field.
 
 ### GET /playlists/{playlistIndex}/items/{itemIndex}/timestamps
 
-The route accepts non-negative decimal playlist and item indices. It resolves the selected entry through foobar2000's playlist manager and does not accept a filesystem path.
-
-Initial response:
+Accepts non-negative decimal playlist and item indices. The route resolves the row through foobar2000's playlist manager and never accepts a caller-supplied path.
 
 ```json
 {
@@ -83,19 +80,19 @@ Initial response:
       "creationTime": {
         "supported": true,
         "readable": true,
-        "writable": true,
+        "writable": false,
         "unixMilliseconds": 1795600000000
       },
       "lastAccessTime": {
         "supported": true,
         "readable": true,
-        "writable": true,
+        "writable": false,
         "unixMilliseconds": 1795600000000
       },
       "lastWriteTime": {
         "supported": true,
         "readable": true,
-        "writable": true,
+        "writable": false,
         "unixMilliseconds": 1795600000000
       },
       "changeTime": {
@@ -109,102 +106,48 @@ Initial response:
 }
 ```
 
-The example shows the target schema, not a guarantee that all four fields are supported on every filesystem. A field that cannot be read must be represented with `readable: false` and a stable field-level error. `changeTime` is read-only unless a supported write path is demonstrated and tested.
+The example illustrates the schema. Real values come from `GetFileInformationByHandleEx(FileBasicInfo)`; a field with no representable value is returned with `readable: false` and `TIMESTAMP_UNAVAILABLE`. The physical path is never returned.
 
-### PATCH /playlists/{playlistIndex}/items/{itemIndex}/timestamps
+Playlist lookup runs on foobar2000's main thread through the SDK callback queue. The callback only resolves the selected `metadb_handle` and copies its physical path. Windows file attribute I/O runs on an HTTP worker, not the UI thread. A timed-out SDK dispatch returns `503 SDK_DISPATCH_TIMEOUT`.
 
-Accepts only explicitly supported fields. Unknown fields are rejected; the server must not silently ignore them.
-
-Request example:
-
-```json
-{
-  "timestamps": {
-    "creationTime": 1795600000000,
-    "lastWriteTime": 1795600000000
-  }
-}
-```
-
-Initial implementation may return `202 Accepted` with a job ID:
-
-```json
-{
-  "success": true,
-  "data": {
-    "jobId": "opaque-random-id",
-    "state": "queued"
-  }
-}
-```
-
-A job must resolve and authorize the selected playlist item before modifying the file. The operation uses a filesystem handle with minimum required access, applies only supported timestamp fields, then reads the values back. It must not rely solely on the requested values.
-
-### GET /jobs/{jobId}
-
-Returns one of `queued`, `running`, `completed`, `failed`, or `cancelled`.
-
-Completed example:
-
-```json
-{
-  "success": true,
-  "data": {
-    "jobId": "opaque-random-id",
-    "state": "completed",
-    "result": {
-      "filesystem": {
-        "success": true,
-        "timestamps": {}
-      },
-      "metadb": {
-        "requested": false,
-        "state": "not_requested"
-      }
-    }
-  }
-}
-```
-
-Filesystem and metadb outcomes are separate. A successful timestamp write must not imply that foobar2000's metadata database has refreshed.
-
-### DELETE /jobs/{jobId}
-
-Requests cancellation only while the job is still queued. Once an OS file operation or SDK operation has begun, cancellation may be unavailable and must return a conflict response rather than falsely claiming cancellation.
-
-## Initial error codes
+### Error codes for read endpoints
 
 - `UNAUTHORIZED`
 - `ORIGIN_NOT_ALLOWED`
-- `INVALID_REQUEST`
-- `INVALID_JSON`
-- `PAYLOAD_TOO_LARGE`
-- `ROUTE_NOT_FOUND`
-- `METHOD_NOT_ALLOWED`
+- `INVALID_HOST`
 - `INVALID_PLAYLIST_INDEX`
 - `INVALID_ITEM_INDEX`
-- `ITEM_NOT_AVAILABLE`
+- `INVALID_PLAYLIST_COORDINATES`
+- `SDK_DISPATCH_TIMEOUT`
+- `SDK_THREAD_VIOLATION`
 - `FILE_ACCESS_DENIED`
 - `FILE_NOT_FOUND`
-- `TIMESTAMP_NOT_SUPPORTED`
-- `TIMESTAMP_WRITE_FAILED`
-- `METADB_REFRESH_FAILED`
-- `JOB_NOT_FOUND`
-- `JOB_NOT_CANCELLABLE`
+- `ITEM_NOT_SUPPORTED`
+- `FILE_METADATA_READ_FAILED`
+- `ROUTE_NOT_FOUND`
+- `METHOD_NOT_ALLOWED`
 - `SERVICE_STOPPING`
 - `INTERNAL_ERROR`
 
-## Timestamp semantics
+## Planned, not yet implemented
 
-The API uses Windows terminology:
+### PATCH /playlists/{playlistIndex}/items/{itemIndex}/timestamps
 
-- `creationTime` = Windows file creation time.
-- `lastAccessTime` = Windows last-access time.
-- `lastWriteTime` = Windows last-write time.
-- `changeTime` = Windows change time, not POSIX ctime.
+The write route will accept only explicitly supported timestamp fields and will return a bounded job identifier when execution is asynchronous. It is not implemented in the current read-only phase.
 
-All values are Unix milliseconds on the wire. Internal code preserves FILETIME precision. Missing or unsupported values are not represented as zero or as a fabricated timestamp.
+### GET /jobs/{jobId} and DELETE /jobs/{jobId}
 
-## Metadb consistency
+The job manager is not implemented yet. Cancellation will only be accepted while a job remains queued; an OS or SDK operation that has begun will not be reported as cancelled.
 
-A timestamp write and a foobar2000 metadata refresh are separate operations. The component must use the pinned foobar2000 SDK's supported interfaces and must never edit foobar2000's database files directly. The first implementation must verify whether a timestamp-only change actually requires a metadata reload before enabling the `metadbRefresh` capability.
+## Timestamp terminology
+
+- `creationTime`: Windows creation time.
+- `lastAccessTime`: Windows last-access time.
+- `lastWriteTime`: Windows last-write time.
+- `changeTime`: Windows ChangeTime, not POSIX ctime; read-only.
+
+Values are Unix milliseconds on the wire. FILETIME precision is retained internally until serialization. Missing or out-of-range values are not fabricated as zero.
+
+## metadb consistency
+
+A filesystem timestamp operation and a foobar2000 metadb refresh are independent outcomes. The component never edits foobar2000's database files. The first release leaves `metadbRefresh: false`; Phase D will verify whether a timestamp-only change requires any supported metadb notification before enabling it.

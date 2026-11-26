@@ -4,6 +4,7 @@
 
 #include <Windows.h>
 
+#include <limits>
 #include <string>
 
 namespace craybridge::playlist {
@@ -47,28 +48,54 @@ ItemPathResult resolve_item_path(std::size_t playlist_index,
         return result;
     }
 
-    metadb_handle_ptr handle;
-    if (!playlist_manager::get()->playlist_get_item_handle(
-            handle,
-            static_cast<t_size>(playlist_index),
-            static_cast<t_size>(item_index))) {
-        result.win32_error = ERROR_INVALID_INDEX;
+    if (playlist_index >
+            static_cast<std::size_t>((std::numeric_limits<t_size>::max)()) ||
+        item_index >
+            static_cast<std::size_t>((std::numeric_limits<t_size>::max)())) {
+        result.win32_error = ERROR_INVALID_PARAMETER;
         return result;
     }
 
-    if (!utf8_to_wide(handle->get_path(),
-                      result.physical_path,
-                      result.win32_error)) {
+    try {
+        auto manager = playlist_manager::get();
+        const auto playlist_count = manager->get_playlist_count();
+
+        if (static_cast<t_size>(playlist_index) >= playlist_count) {
+            result.win32_error = ERROR_NOT_FOUND;
+            return result;
+        }
+
+        const auto playlist = static_cast<t_size>(playlist_index);
+        const auto item_count = manager->playlist_get_item_count(playlist);
+
+        if (static_cast<t_size>(item_index) >= item_count) {
+            result.win32_error = ERROR_INVALID_INDEX;
+            return result;
+        }
+
+        metadb_handle_ptr handle;
+        if (!manager->playlist_get_item_handle(
+                handle, playlist, static_cast<t_size>(item_index))) {
+            result.win32_error = ERROR_INVALID_INDEX;
+            return result;
+        }
+
+        if (!utf8_to_wide(handle->get_path(),
+                          result.physical_path,
+                          result.win32_error)) {
+            return result;
+        }
+
+        // Only the copied physical path leaves the main-thread SDK boundary.
+        // The retained handle preserves the exact playlist/subsong identity.
+        result.handle = handle;
+        result.success = true;
+        result.win32_error = ERROR_SUCCESS;
+        return result;
+    } catch (...) {
+        result.win32_error = ERROR_GEN_FAILURE;
         return result;
     }
-
-    // This is the physical media path. The selected metadb_handle remains the
-    // authority for the playlist/subsong identity; only the copied path leaves
-    // the main-thread SDK boundary. No disk operation runs here.
-    result.handle = handle;
-    result.success = true;
-    result.win32_error = ERROR_SUCCESS;
-    return result;
 }
 
 } // namespace craybridge::playlist
