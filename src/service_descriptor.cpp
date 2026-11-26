@@ -176,24 +176,6 @@ bool is_directory_without_reparse_point(const std::filesystem::path& path) noexc
         (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0;
 }
 
-bool ensure_parent_directory(const std::filesystem::path& path,
-                             unsigned long& error_code) {
-    if (::CreateDirectoryW(path.c_str(), nullptr)) {
-        error_code = ERROR_SUCCESS;
-        return true;
-    }
-
-    error_code = ::GetLastError();
-    if (error_code != ERROR_ALREADY_EXISTS) return false;
-    if (!is_directory_without_reparse_point(path)) {
-        error_code = ERROR_CANT_ACCESS_FILE;
-        return false;
-    }
-
-    error_code = ERROR_SUCCESS;
-    return true;
-}
-
 bool ensure_protected_directory(const std::filesystem::path& path,
                                 PSECURITY_DESCRIPTOR security_descriptor,
                                 unsigned long& error_code) {
