@@ -25,10 +25,8 @@ std::string read_file(const std::filesystem::path& path) {
 } // namespace
 
 int run_service_descriptor_tests() {
-    constexpr char token[] =
-        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi";
-    constexpr char instance[] =
-        "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG";
+    const std::string token(43, 'A');
+    const std::string instance(43, 'B');
     std::string json;
 
     if (!require(
@@ -84,6 +82,7 @@ int run_service_descriptor_tests() {
     }
 
     const auto descriptor_path = publisher.descriptor_path();
+    const auto first_instance_id = std::string(publisher.instance_id());
     const auto published = read_file(descriptor_path);
     if (!require(!published.empty() &&
                  published.find("\"service\":\"crayonshell\"") != std::string::npos &&
@@ -91,6 +90,14 @@ int run_service_descriptor_tests() {
                  published.find("\"baseUrl\":\"http://127.0.0.1:49153\"") != std::string::npos &&
                  !publisher.instance_id().empty(),
                  "published descriptor must identify the current process and loopback service")) {
+        publisher.remove_if_owned();
+        std::filesystem::remove_all(test_root, filesystem_error);
+        return 1;
+    }
+
+    if (!require(publisher.publish(49153, token, error_code) &&
+                 publisher.instance_id() == first_instance_id,
+                 "descriptor refresh must preserve the running instance identity")) {
         publisher.remove_if_owned();
         std::filesystem::remove_all(test_root, filesystem_error);
         return 1;
