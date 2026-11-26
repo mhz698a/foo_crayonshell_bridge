@@ -19,7 +19,7 @@ The filesystem timestamp helper now has a first implementation independent of HT
 - Reads values back from the same file handle after a successful write and reports write success separately from readback success.
 - Converts FILETIME to Unix milliseconds and validates the reverse conversion against the signed `LARGE_INTEGER` range used by `FILE_BASIC_INFO`.
 
-This helper is not yet exposed to JavaScript and is not yet called by an HTTP route. Its Windows tests have been expanded, but the updated source has not yet been run through the Windows CI pipeline.
+The filesystem helper is not yet exposed to JavaScript or called by an HTTP route. Its Windows read/write tests have been expanded. The HTTP parser adapter and parser tests are now part of both Visual Studio projects; CI must verify the current branch head before these changes are considered build-validated.
 
 ## Constraints discovered
 
@@ -37,7 +37,11 @@ The production origin and development origin must be exact allowlist entries. No
 
 The selected direction is a small native Winsock transport with the maintained, pure-C `llhttp` parser. The parser is incremental, supports HTTP/1.x framing including chunked transfer encoding, and rejects ambiguous transfer-encoding/content-length combinations by default. Its generated C sources can be pinned and compiled by the existing MSVC x86/x64 workflow; the build must not require Node.js or code generation at build time.
 
-The component will own the socket lifecycle and bounded worker scheduling. It will not implement HTTP request parsing by hand. Dependency source, exact upstream release/commit, license, and generated-source provenance must be pinned in the repository before production code is added.
+The component will own the socket lifecycle and bounded worker scheduling. It will not implement HTTP request parsing by hand.
+
+The parser is now selected and staged from upstream `nodejs/llhttp` release `release/v9.4.4`, commit prefix `8164852` (published 2026-11-13), under the MIT license. The release branch contains the generated C parser source and native helper sources, so the build does not run Node.js, npm, llparse, or code generation. CI verifies the commit prefix and public header version (9.4.4), then stages `llhttp.c`, `api.c`, `http.c`, `llhttp.h`, and the MIT license into the ignored `vendor/llhttp` directory.
+
+The component and test projects compile the three C files directly for Win32 and x64. The C++ adapter uses incremental `llhttp_execute` callbacks, keeps repeated headers as separate entries, decodes Content-Length and chunked bodies, and stops after the first complete request. It enforces 16 KiB of accumulated header data, 16 KiB of decoded body data, a 4 KiB target, and 64 headers. It accepts HTTP/1.1 only, rejects CONNECT and protocol upgrades, and leaves llhttp's strict defaults unchanged. In particular, lenient parsing flags are not enabled. Parser tests cover fragmented reads, content-length, chunked framing, CL/TE conflicts, upgrades, version rejection, size limits, and pipelined input.
 
 ## Process and thread model
 
@@ -115,7 +119,8 @@ The API will not initially expose generic file IDs, arbitrary paths, metadata ed
 ## Delivery phases
 
 ### Phase A — contract and bootstrap
-- Pin the HTTP parser source and license.
+- [x] Pin the HTTP parser source and license.
+- [x] Add the parser adapter and strict bounded parser tests to x86/x64 projects.
 - Specify the Winsock listener, parser adapter, worker queue, and shutdown ownership.
 - Determine the exact WebView2 bootstrap mechanism for port/token discovery.
 - Verify CORS and Private Network Access in production and development WebView2 origins.
