@@ -16,7 +16,7 @@ VALIDATE_COMPONENT_FILENAME("foo_crayonshell_bridge.dll");
 
 namespace craybridge {
 
-class BridgeRuntime final : public initquit {
+class BridgeRuntime : public initquit {
 public:
     void on_init() override {
         try {
