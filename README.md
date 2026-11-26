@@ -61,7 +61,7 @@ The package and checksum are written to dist/.
 
 After the loopback HTTP listener starts, the component writes its descriptor atomically to:
 
-`%LOCALAPPDATA%\\foobar2000\\foo_crayonshell_bridge\\<pid>\\service.json`
+`<foobar2000-profile>\\foo_crayonshell_bridge\\service.json`
 
 The component directory, PID directory and descriptor use a protected DACL that grants full control only to the current Windows user and LocalSystem. The descriptor contains the current process ID, loopback port, bearer token, 256-bit instance ID and expiry. It is removed before orderly listener shutdown; its 24-hour expiry is refreshed every six hours without rotating the running credentials.
 
