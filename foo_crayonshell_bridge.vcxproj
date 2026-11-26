@@ -94,7 +94,9 @@
   <ItemGroup>
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\file_creation_time.cpp" />
+    <ClCompile Include="src\playlist_item_creation_time.cpp" />
     <ClInclude Include="src\file_creation_time.h" />
+    <ClInclude Include="src\playlist_item_creation_time.h" />
     <ClInclude Include="src\version.h" />
   </ItemGroup>
 
