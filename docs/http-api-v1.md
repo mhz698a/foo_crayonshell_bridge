@@ -27,10 +27,11 @@ Failure:
       "error": {
         "code": "INVALID_PLAYLIST_INDEX",
         "message": "The requested playlist does not exist."
+        // Filesystem failures may additionally include a numeric win32Error.
       }
     }
 
-Messages do not disclose filesystem paths, tokens or internal details. Error codes are stable machine-readable identifiers.
+Messages do not disclose filesystem paths, tokens or internal details. Error codes are stable machine-readable identifiers. Filesystem-operation errors also include the numeric `win32Error` returned by the Windows API, allowing the caller to distinguish the underlying OS failure without exposing the file path.
 
 ## GET /system/health
 
@@ -63,7 +64,7 @@ The write flags describe the API's implemented capability. An individual filesys
 
 Accepts non-negative decimal playlist and item indices. The route resolves the row through foobar2000's playlist manager and never accepts a caller-supplied path.
 
-The response returns the file size in bytes as `fileSizeBytes`, plus creationTime, lastAccessTime, lastWriteTime and Windows changeTime as Unix milliseconds. File size is read with `GetFileInformationByHandleEx(FileStandardInfo)`; it is not derived from Title Formatting. The first three fields are writable. changeTime is read-only.
+The response returns the file size in bytes as `fileSizeBytes`, plus creationTime, lastAccessTime, lastWriteTime and Windows changeTime as Unix milliseconds. The preferred read uses `GetFileInformationByHandleEx(FileBasicInfo)` and `FileStandardInfo`; where those structures are unavailable, the component falls back to `GetFileInformationByHandle` and preserves the file size and the three standard timestamps. In fallback mode ChangeTime is unavailable rather than being substituted with another date. File size is never derived from Title Formatting. The first three fields are writable. changeTime is read-only.
 
 The HTTP worker asks foobar2000's main-thread callback queue to resolve playlist coordinates. That callback performs only SDK work and copies the physical path. Windows file-attribute I/O runs outside the UI thread. The physical path is never returned.
 
