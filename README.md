@@ -55,3 +55,14 @@ The package and checksum are written to dist/.
 - SDK calls run only on the thread required by foobar2000.
 - foobar2000 database files are never edited directly.
 - Windows ChangeTime is read-only unless a supported write mechanism is independently verified.
+
+
+## Trusted WebView2 bootstrap descriptor
+
+After the loopback HTTP listener starts, the component writes its descriptor atomically to:
+
+`%LOCALAPPDATA%\\foobar2000\\foo_crayonshell_bridge\\<pid>\\service.json`
+
+The component directory, PID directory and descriptor use a protected DACL that grants full control only to the current Windows user and LocalSystem. The descriptor contains the current process ID, loopback port, bearer token, 256-bit instance ID and expiry. It is removed before orderly listener shutdown; its 24-hour expiry is refreshed every six hours without rotating the running credentials.
+
+The descriptor is not served by HTTP. The trusted `foo_ui_webview2` host still needs to implement `system.getLocalServiceDescriptor({ service: "crayonshell" })`, read only the current process's fixed descriptor path, verify the caller origin and return the descriptor to the approved page. Until that host method is available, CrayonShell cannot obtain the token and the timestamp inspector cannot complete its HTTP request.
