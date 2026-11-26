@@ -1,0 +1,24 @@
+# Visual Studio / MSBuild
+.vs/
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.VC.db
+*.VC.VC.opendb
+*.pdb
+*.ilk
+*.pch
+*.obj
+*.lib
+*.exp
+*.dll
+*.exe
+
+# Build/package output
+dist/
+_sdk-staging/
+vendor/
+
+# IDE
+.vscode/

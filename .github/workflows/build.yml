@@ -1,0 +1,121 @@
+name: Build component
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and package (Windows x64)
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout component
+        uses: actions/checkout@v6
+
+      - name: Checkout pinned foobar2000 SDK
+        uses: actions/checkout@v6
+        with:
+          repository: reupen/foobar2000-sdk-unmodified
+          ref: 9e4823ee802dfb704de1ce42401b48b407a54180
+          path: _sdk-staging
+
+      - name: Stage SDK dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = $env:GITHUB_WORKSPACE
+          $source = Join-Path $root '_sdk-staging\foobar2000'
+          $vendor = Join-Path $root 'vendor'
+          $fb2k = Join-Path $vendor 'foobar2000'
+          New-Item -ItemType Directory -Force -Path $fb2k, $vendor | Out-Null
+
+          foreach ($name in @('SDK', 'helpers', 'shared', 'foobar2000_component_client')) {
+            $from = Join-Path $source $name
+            if (-not (Test-Path $from)) { throw "Missing SDK directory: $from" }
+            Copy-Item -LiteralPath $from -Destination $fb2k -Recurse -Force
+          }
+
+          $pfcSource = Join-Path $root '_sdk-staging\pfc'
+          if (-not (Test-Path $pfcSource)) { throw "Missing PFC SDK directory: $pfcSource" }
+          Copy-Item -LiteralPath $pfcSource -Destination $vendor -Recurse -Force
+
+          foreach ($required in @(
+            'vendor\foobar2000\SDK\foobar2000_SDK.vcxproj',
+            'vendor\foobar2000\foobar2000_component_client\foobar2000_component_client.vcxproj',
+            'vendor\pfc\pfc.vcxproj'
+          )) {
+            if (-not (Test-Path (Join-Path $root $required))) {
+              throw "SDK staging incomplete: $required"
+            }
+          }
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Build component
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $solutionDir = "$env:GITHUB_WORKSPACE\"
+          msbuild foo_crayonshell_bridge.vcxproj /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 "/p:SolutionDir=$solutionDir" /m /nologo /v:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          msbuild tests\foo_crayonshell_bridge_tests.vcxproj /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /m /nologo /v:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          & '.\bin\tests\Release_x64\foo_crayonshell_bridge_tests.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package fb2k-component
+        shell: pwsh
+        run: .\scripts\package-component.ps1 -Configuration Release -Platform x64
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: foo_crayonshell_bridge-windows-x64
+          path: |
+            dist/*.fb2k-component
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish GitHub Release for version tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = $env:TAG_NAME
+          $assets = @(
+            (Get-ChildItem dist -Filter '*.fb2k-component').FullName
+            (Get-ChildItem dist -Filter '*.sha256').FullName
+          )
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --clobber
+          } else {
+            gh release create $tag @assets --title "CrayonShell Bridge $tag" --generate-notes
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
