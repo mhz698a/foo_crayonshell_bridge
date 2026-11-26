@@ -667,9 +667,8 @@ struct HttpServer::Impl {
 
             process_socket(accepted);
 
-            ::shutdown(accepted, SD_BOTH);
-            ::closesocket(accepted);
-
+            // Remove the descriptor from the stop-visible set before closing
+            // it. Otherwise stop() could shutdown a recycled SOCKET value.
             {
                 std::lock_guard<std::mutex> queue_lock(queue_mutex);
                 const auto active = std::find(
@@ -678,6 +677,9 @@ struct HttpServer::Impl {
                     active_sockets.erase(active);
                 }
             }
+
+            ::shutdown(accepted, SD_BOTH);
+            ::closesocket(accepted);
         }
     }
 

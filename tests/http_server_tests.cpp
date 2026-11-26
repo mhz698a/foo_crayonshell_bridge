@@ -305,7 +305,7 @@ void test_bounded_queue_returns_service_busy() {
                 lock,
                 std::chrono::seconds(4),
                 [&release_handler] { return release_handler; });
-            return craybridge::http::HttpResponse{200, "{\\"success\\":true}"};
+            return craybridge::http::HttpResponse{200, "{\"success\":true}"};
         },
         options);
 
