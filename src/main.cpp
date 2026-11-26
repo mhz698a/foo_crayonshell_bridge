@@ -71,6 +71,10 @@ public:
                 std::make_unique<bootstrap::ServiceDescriptorPublisher>(profile_root);
 
             api_ = std::make_unique<api::ApiController>();
+            http::HttpServerOptions http_options{};
+            // Only the exact local Vite development origin is added alongside
+            // the production WebView2 origin; wildcard CORS remains disabled.
+            http_options.allow_vite_dev_origin = true;
             server_ = std::make_unique<http::HttpServer>(
                 [this](const http::Request& request) {
                     if (!api_ || shutting_down_.load()) {
@@ -82,7 +86,8 @@ public:
                         };
                     }
                     return api_->handle(request);
-                });
+                },
+                http_options);
 
             // Job workers, the Winsock listener and descriptor publication
             // run away from foobar2000's UI-thread initialization callback.
